@@ -9,6 +9,6 @@ slf4j = "2.0.12"
 
 [libraries]
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
-javalin-bundle = { group = "io.javalin", name = "javalin", version.ref = "javalin" }
+javalin-bundle = { group = "io.javalin", name = "javalin-bundle", version.ref = "javalin" }
 mysql-connector = { group = "com.mysql", name = "mysql-connector-j", version.ref = "mysql" }
 slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }

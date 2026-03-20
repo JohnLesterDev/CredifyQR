@@ -11,4 +11,4 @@ plugins {
 }
 
 rootProject.name = 'Altheia'
-include('app')
+include('altheia')
