@@ -1,20 +1,29 @@
-### Java/Gradle ###
+# --- Java & Gradle ---
 .gradle/
 build/
+bin/
+out/
+app/bin/
+app/build/
+.artifacts/
+
+# Keep the Gradle Wrapper so your team can run the project
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties
-/out/
-/bin/
 
-### VS Code ###
+# --- IDEs & Editors ---
 .vscode/
-*.code-workspace
-.history/
+.idea/
+*.swp
+*.iml
+.classpath
+.project
+.settings/
 
-### OS Specific ###
+# --- OS Specific ---
 .DS_Store
 Thumbs.db
 
-### Local Environment ###
+# --- Local Environment ---
 .env
 *.log
