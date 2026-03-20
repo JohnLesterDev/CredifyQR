@@ -1,0 +1,51 @@
+plugins {
+    id 'application'
+    id 'java'
+}
+
+version = "${majorVersion}.${minorVersion}.${patchVersion}"
+group = project.group
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation libs.guava
+    implementation libs.javalin.bundle
+    implementation libs.mysql.connector
+    implementation libs.slf4j.simple
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("application.properties") {
+        expand(version: project.version)
+    }
+}
+
+application {
+    mainClass = 'dev.johnlester.Altheia.App'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'dev.johnlester.Altheia.App' 
+    }
+
+    archiveFileName = "${project.name}-${project.version}.jar"
+    
+    destinationDirectory = file("$rootDir")
+
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
