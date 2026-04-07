@@ -15,6 +15,9 @@ dependencies {
     implementation libs.javalin.bundle
     implementation libs.mysql.connector
     implementation libs.slf4j.simple
+
+    implementation libs.javalin.rendering
+    implementation libs.thymeleaf
 }
 
 java {
@@ -31,12 +34,12 @@ processResources {
 }
 
 application {
-    mainClass = 'dev.johnlester.Altheia.App'
+    mainClass = 'dev.johnlester.credifyqr.App'
 }
 
 jar {
     manifest {
-        attributes 'Main-Class': 'dev.johnlester.Altheia.App' 
+        attributes 'Main-Class': 'dev.johnlester.credifyqr.App' 
     }
 
     archiveFileName = "${project.name}-${project.version}.jar"

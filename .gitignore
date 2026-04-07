@@ -27,3 +27,9 @@ Thumbs.db
 # --- Local Environment ---
 .env
 *.log
+
+# --- Project Specifics ---
+altheia/bin/
+altheia/build/
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
