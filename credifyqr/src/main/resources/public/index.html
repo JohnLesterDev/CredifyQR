@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CredifyQR</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container" id="status">
+        <p>Checking session...</p>
+    </div>
+    <script src="/js/app.js"></script>
+    <script>
+        (async () => {
+            const user = await checkSession();
+            if (user) {
+                window.location.href = '/dashboard.html';
+            } else {
+                window.location.href = '/login.html';
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -13,7 +13,7 @@ repositories {
 dependencies {
     implementation libs.guava
     implementation libs.javalin.bundle
-    implementation libs.mysql.connector
+    implementation libs.sqlite.jdbc
     implementation libs.slf4j.simple
 
     implementation libs.javalin.rendering
@@ -34,12 +34,12 @@ processResources {
 }
 
 application {
-    mainClass = 'dev.johnlester.credifyqr.App'
+    mainClass = 'dev.vertesix.credifyqr.bootstrap.App'
 }
 
 jar {
     manifest {
-        attributes 'Main-Class': 'dev.johnlester.credifyqr.App' 
+        attributes 'Main-Class': 'dev.vertesix.credifyqr.bootstrap.App' 
     }
 
     archiveFileName = "${project.name}-${project.version}.jar"

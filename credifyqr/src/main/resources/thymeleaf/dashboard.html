@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Dashboard - CredifyQR</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-header">
+            <div class="user-info">
+                Logged in as <strong th:text="${username}">User</strong>
+                <span class="role-badge" th:text="${role}">ROLE</span>
+            </div>
+            <button class="secondary" onclick="handleLogout()">Logout</button>
+        </div>
+
+        <div class="actions">
+            <h3>Available Actions</h3>
+            <div th:if="${role == 'STUDENT'}">
+                <a href="#" onclick="testRoute('/api/student/dashboard')">Student Dashboard</a>
+            </div>
+            <div th:if="${role == 'REGISTRAR_STAFF' or role == 'CAMPUS_DIRECTOR'}">
+                <a href="#" onclick="testRoute('/api/admin/credentials')">Credential Management</a>
+            </div>
+            <a href="#" onclick="testRoute('/api/session')">Refresh Session Info</a>
+        </div>
+
+        <div id="test-result"></div>
+    </div>
+
+    <script>
+        async function handleLogout() {
+            await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+            window.location.href = '/login';
+        }
+
+        async function testRoute(url) {
+            const resultDiv = document.getElementById('test-result');
+            try {
+                const resp = await fetch(url, { credentials: 'same-origin' });
+                const text = await resp.text();
+                if (resp.ok) {
+                    resultDiv.innerHTML = `<div class="success">${text}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">${text} (${resp.status})</div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="error">Request failed: ${e.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
