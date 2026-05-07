@@ -35,3 +35,8 @@ altheia/bin/
 altheia/build/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
+
+# --- SQLite databases ---
+*.db
+*.db-journal
+*.db-wal
