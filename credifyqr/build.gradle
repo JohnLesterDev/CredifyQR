@@ -11,13 +11,22 @@ repositories {
 }
 
 dependencies {
-    implementation libs.guava
-    implementation libs.javalin.bundle
     implementation libs.sqlite.jdbc
-    implementation libs.slf4j.simple
 
+    implementation libs.guava
+    implementation libs.logback.classic 
+
+    implementation libs.javalin.bundle
     implementation libs.javalin.rendering
+
     implementation libs.thymeleaf
+
+    implementation libs.jbcrypt
+    implementation libs.jjwt.api
+    runtimeOnly libs.jjwt.impl
+    runtimeOnly libs.jjwt.jackson
+
+    implementation libs.dotenv.java
 }
 
 java {
@@ -26,29 +35,23 @@ java {
     }
 }
 
-processResources {
-    inputs.property "version", project.version
-    filesMatching("application.properties") {
-        expand(version: project.version)
-    }
-}
-
 application {
     mainClass = 'dev.vertesix.credifyqr.bootstrap.App'
+    applicationDefaultJvmArgs = ["-Dlogback.configurationFile=src/main/resources/logback-main.xml"]
+}
+
+run {
+    systemProperty "logback.configurationFile", "src/main/resources/logback-main.xml"
 }
 
 jar {
     manifest {
         attributes 'Main-Class': 'dev.vertesix.credifyqr.bootstrap.App' 
     }
-
     archiveFileName = "${project.name}-${project.version}.jar"
-    
     destinationDirectory = file("$rootDir")
-
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
-    
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

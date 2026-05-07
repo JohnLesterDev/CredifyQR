@@ -4,10 +4,12 @@ import dev.vertesix.credifyqr.Identity.core.domain.User;
 import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
+import io.jsonwebtoken.Claims;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+
 
 public class PageController {
     private final IdentityUseCase identityUseCase;
@@ -17,52 +19,85 @@ public class PageController {
     }
 
     public void registerRoutes(Javalin app) {
-        // Landing page redirects based on session
         app.get("/", this::landing);
         app.get("/login", this::showLogin);
         app.get("/dashboard", this::showDashboard);
+        app.get("/force-password-change", this::showForcePasswordChange);
+    }
+
+    private String getUserIdFromToken(Context ctx) {
+        String token = ctx.cookie("auth_token"); // Updated cookie name
+        if (token == null || token.isBlank()) return null;
+        try {
+            Claims claims = JwtProvider.validateToken(token);
+            return claims.getSubject(); // Extract the UUID
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean isValidSession(Context ctx) {
+        String userId = getUserIdFromToken(ctx);
+        if (userId == null) return false;
+        return identityUseCase.findById(userId).isPresent();
     }
 
     private void landing(Context ctx) {
-        String userId = ctx.cookie("auth_session");
-        if (isValidSession(userId)) {
+        if (isValidSession(ctx)) {
             ctx.redirect("/dashboard");
         } else {
             ctx.redirect("/login");
         }
     }
 
-    private void showLogin(Context ctx) {
-        // If already logged in, go to dashboard
-        if (isValidSession(ctx.cookie("auth_session"))) {
+    private void showLogin(Context ctx) {        
+        if (isValidSession(ctx)) {
             ctx.redirect("/dashboard");
             return;
         }
-        ctx.render("login");  // Thymeleaf template
+        ctx.render("login"); 
     }
 
     private void showDashboard(Context ctx) {
-        String userId = ctx.cookie("auth_session");
-        if (userId == null || !isValidSession(userId)) {
+        String userId = getUserIdFromToken(ctx);
+        if (userId == null) {
+            ctx.removeCookie("auth_token");
             ctx.redirect("/login");
             return;
         }
+
         Optional<User> userOpt = identityUseCase.findById(userId);
         if (userOpt.isEmpty()) {
-            ctx.removeCookie("auth_session");
-            ctx.removeCookie("user_role");
+            ctx.removeCookie("auth_token");
             ctx.redirect("/login");
             return;
         }
         User user = userOpt.get();
+
+        if (user.isTemporary()) {
+            ctx.redirect("/force-password-change");
+            return;
+        }
+
         Map<String, Object> model = new HashMap<>();
         model.put("username", user.getUsername());
         model.put("role", user.getRole().name());
         ctx.render("dashboard", model);
     }
 
-    private boolean isValidSession(String userId) {
-        if (userId == null || userId.isBlank()) return false;
-        return identityUseCase.findById(userId).isPresent();
+    private void showForcePasswordChange(Context ctx) {
+        String userId = getUserIdFromToken(ctx);
+        if (userId == null) {
+            ctx.redirect("/login");
+            return;
+        }
+
+        Optional<User> userOpt = identityUseCase.findById(userId);
+        if (userOpt.isEmpty() || !userOpt.get().needsPasswordReset()) {
+            ctx.redirect("/dashboard");
+            return;
+        }
+
+        ctx.render("force-password-change");
     }
 }

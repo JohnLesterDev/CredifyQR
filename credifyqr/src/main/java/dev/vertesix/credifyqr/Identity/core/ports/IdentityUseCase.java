@@ -7,4 +7,6 @@ public interface IdentityUseCase {
     Optional<User> authenticate(String username, String password);
     void registerUser(String username, String password, String role);
     Optional<User> findById(String id);
+    String claimStudentAccount(String studentId, String birthdate);
+    void changePassword(String userId, String newPassword);
 }

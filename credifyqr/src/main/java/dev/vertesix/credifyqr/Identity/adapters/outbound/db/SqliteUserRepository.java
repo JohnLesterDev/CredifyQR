@@ -21,7 +21,10 @@ public class SqliteUserRepository implements UserRepository {
                 id TEXT PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL
+                role TEXT NOT NULL,
+                birthdate TEXT,
+                is_claimed INTEGER NOT NULL,
+                needs_password_reset INTEGER NOT NULL
             );
             """;
         try (Connection conn = DriverManager.getConnection(dbUrl);
@@ -66,14 +69,17 @@ public class SqliteUserRepository implements UserRepository {
 
     @Override
     public void save(User user) {
-        String sql = "INSERT INTO users(id, username, password_hash, role) VALUES(?,?,?,?) " +
-                     "ON CONFLICT(id) DO UPDATE SET password_hash=excluded.password_hash, role=excluded.role";
+        String sql = "INSERT INTO users(id, username, password_hash, role, birthdate, is_claimed, needs_password_reset) VALUES(?,?,?,?,?,?,?) " +
+                     "ON CONFLICT(id) DO UPDATE SET password_hash=excluded.password_hash, role=excluded.role, is_claimed=excluded.is_claimed, needs_password_reset=excluded.needs_password_reset";
         try (Connection conn = DriverManager.getConnection(dbUrl);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, user.getId());
             pstmt.setString(2, user.getUsername());
             pstmt.setString(3, user.getPasswordHash());
             pstmt.setString(4, user.getRole().name());
+            pstmt.setString(5, user.getBirthdate());
+            pstmt.setInt(6, user.isClaimed() ? 1 : 0);
+            pstmt.setInt(7, user.needsPasswordReset() ? 1 : 0);
             pstmt.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save user", e);
@@ -85,7 +91,10 @@ public class SqliteUserRepository implements UserRepository {
             rs.getString("id"),
             rs.getString("username"),
             rs.getString("password_hash"),
-            Role.valueOf(rs.getString("role"))
+            Role.valueOf(rs.getString("role")),
+            rs.getString("birthdate"),
+            rs.getInt("is_claimed") == 1,
+            rs.getInt("needs_password_reset") == 1
         );
     }
 }

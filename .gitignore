@@ -27,6 +27,8 @@ Thumbs.db
 # --- Local Environment ---
 .env
 *.log
+*.logs
+*.logs/*
 
 # --- Project Specifics ---
 altheia/bin/

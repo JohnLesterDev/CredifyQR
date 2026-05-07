@@ -11,29 +11,22 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.mindrot.jbcrypt.BCrypt;
+
+
+
 public class IdentityService implements IdentityUseCase {
 
     private final UserRepository userRepository;
 
-    // Dependency Injection: We pass the port (interface), not the SQLite adapter.
     public IdentityService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
     @Override
     public Optional<User> authenticate(String username, String password) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
-        
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            String hashedInput = hashPassword(password);
-            
-            // If the hashes match, authentication is successful
-            if (user.getPasswordHash().equals(hashedInput)) {
-                return Optional.of(user);
-            }
-        }
-        return Optional.empty(); // Login failed
+        return userRepository.findByUsername(username)
+            .filter(user -> BCrypt.checkpw(password, user.getPasswordHash()));
     }
 
     @Override
@@ -52,30 +45,51 @@ public class IdentityService implements IdentityUseCase {
         String userId = UUID.randomUUID().toString();
         String passwordHash = hashPassword(password);
 
-        User newUser = new User(userId, username, passwordHash, role);
+        User newUser = new User(userId, username, passwordHash, role, "1990-01-01", true, false);
         userRepository.save(newUser);
     }
 
     private String hashPassword(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] encodedhash = digest.digest(password.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
-            for (byte b : encodedhash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) {
-                    hexString.append('0');
-                }
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Failed to hash password.", e);
-        }
+        return BCrypt.hashpw(password, BCrypt.gensalt(12));
     }
 
     @Override
     public Optional<User> findById(String id) {
         return userRepository.findById(id);
+    }
+
+    @Override
+    public String claimStudentAccount(String studentId, String birthdate) {
+        User user = userRepository.findByUsername(studentId)
+            .orElseThrow(() -> new IllegalArgumentException("Student ID not found in the system."));
+
+        if (user.isClaimed()) {
+            throw new IllegalArgumentException("Account has already been claimed. Proceed to login.");
+        }
+
+        if (!user.getBirthdate().equals(birthdate)) {
+            throw new IllegalArgumentException("Verification failed. Invalid birthdate.");
+        }
+
+        String tempPassword = UUID.randomUUID().toString().substring(0, 8);
+        
+        user.setPasswordHash(hashPassword(tempPassword));
+        user.setClaimed(true);
+        user.setNeedsPasswordReset(true);
+        
+        userRepository.save(user);
+
+        return tempPassword;
+    }
+
+    @Override
+    public void changePassword(String userId, String newPassword) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found."));
+
+        user.setPasswordHash(hashPassword(newPassword));
+        user.setNeedsPasswordReset(false);
+        
+        userRepository.save(user);
     }
 }
