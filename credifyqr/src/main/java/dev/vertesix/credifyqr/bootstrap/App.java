@@ -2,27 +2,25 @@ package dev.vertesix.credifyqr.bootstrap;
 
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
+
 import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthController;
 import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthMiddleware;
 import dev.vertesix.credifyqr.Identity.adapters.inbound.web.PageController;
-import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteUserRepository;
 import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteBlacklistRepository;
+import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteUserRepository;
 import dev.vertesix.credifyqr.Identity.core.domain.Role;
 import dev.vertesix.credifyqr.Identity.core.domain.User;
-import dev.vertesix.credifyqr.Identity.core.ports.UserRepository;
-import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
 import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
+import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
+import dev.vertesix.credifyqr.Identity.core.ports.UserRepository;
 import dev.vertesix.credifyqr.Identity.core.service.IdentityService;
-
+import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.rendering.template.JavalinThymeleaf;
-
-import io.github.cdimascio.dotenv.Dotenv;
-
-import org.thymeleaf.TemplateEngine;
-import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 
 public class App {
@@ -71,7 +69,6 @@ public class App {
         // 6. Role-Based Access Control (RBAC) Interceptors
         app.before("/api/student/*", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
         app.before("/api/admin/*", ctx -> AuthMiddleware.requireRole(ctx, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
-        app.post("/api/student/change-password", authController::changePassword);
 
         logger.info("CredifyQR Identity Service running on http://{}:{}", host, port);
 

@@ -1,5 +1,8 @@
 package dev.vertesix.credifyqr.Identity.adapters.inbound.web;
 
+import java.util.Map;
+import java.util.Optional;
+
 import dev.vertesix.credifyqr.Identity.core.domain.User;
 import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
 import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
@@ -8,7 +11,6 @@ import io.javalin.http.Context;
 import io.javalin.http.Cookie;
 import io.javalin.http.SameSite;
 import io.jsonwebtoken.Claims;
-import java.util.*;
 
 public class AuthController {
 
@@ -26,6 +28,7 @@ public class AuthController {
         app.post("/api/logout", this::logout);
         app.get("/api/session", this::session);
         app.post("/api/claim-account", this::claimAccount);
+        app.post("/api/change-password", this::changePassword);
     }
 
     private void login(Context ctx) {
