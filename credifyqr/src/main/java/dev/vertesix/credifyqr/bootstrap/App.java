@@ -68,6 +68,7 @@ public class App {
 
         // 6. Role-Based Access Control (RBAC) Interceptors
         app.before("/api/student/*", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
+        app.before("/api/change-password", ctx -> AuthMiddleware.requireRole(ctx, Role.values()));
         app.before("/api/admin/*", ctx -> AuthMiddleware.requireRole(ctx, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
 
         logger.info("CredifyQR Identity Service running on http://{}:{}", host, port);

@@ -11,12 +11,12 @@
         <div id="login-panel">
             <h3>Login</h3>
             <div class="form-group">
-                <label>Username (Student ID)</label>
-                <input type="text" id="login-username">
+                <label>Credential ID</label>
+                <input type="text" th:id="'u_' + ${nonce}" th:name="'u_' + ${nonce}" data-target="login-user" autocomplete="new-password">
             </div>
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" id="login-password">
+                <input type="password" th:id="'p_' + ${nonce}" th:name="'p_' + ${nonce}" data-target="login-pass" autocomplete="new-password">
             </div>
             <button onclick="handleLogin()">Login</button>
             <p>First time here? <a href="#" onclick="showClaim()">Claim Account</a></p>
@@ -103,8 +103,8 @@
         }
 
         async function handleLogin() {
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
+            const username = document.querySelector('input[data-target="login-user"]').value;
+            const password = document.querySelector('input[data-target="login-pass"]').value;
             const errorEl = document.getElementById('login-error');
             
             errorEl.textContent = '';

@@ -27,6 +27,8 @@ dependencies {
     runtimeOnly libs.jjwt.jackson
 
     implementation libs.dotenv.java
+
+    implementation libs.owasp.java.html.sanitizer
 }
 
 java {

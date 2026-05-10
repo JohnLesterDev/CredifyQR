@@ -1,14 +1,14 @@
 package dev.vertesix.credifyqr.Identity.adapters.inbound.web;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
 import dev.vertesix.credifyqr.Identity.core.domain.User;
 import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.jsonwebtoken.Claims;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 
 
 public class PageController {
@@ -55,7 +55,13 @@ public class PageController {
             ctx.redirect("/dashboard");
             return;
         }
-        ctx.render("login"); 
+        
+        String nonce = java.util.UUID.randomUUID().toString().substring(0, 8);
+        
+        Map<String, Object> model = new HashMap<>();
+        model.put("nonce", nonce);
+        
+        ctx.render("login", model);
     }
 
     private void showDashboard(Context ctx) {

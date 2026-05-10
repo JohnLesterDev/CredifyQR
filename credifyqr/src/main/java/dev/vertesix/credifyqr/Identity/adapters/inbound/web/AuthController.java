@@ -6,6 +6,7 @@ import java.util.Optional;
 import dev.vertesix.credifyqr.Identity.core.domain.User;
 import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
 import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
+import dev.vertesix.credifyqr.Identity.core.security.SanitizerUtil;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.Cookie;
@@ -32,7 +33,7 @@ public class AuthController {
     }
 
     private void login(Context ctx) {
-        String username = ctx.formParam("username");
+        String username = SanitizerUtil.clean(ctx.formParam("username"));
         String password = ctx.formParam("password");
 
         if (username == null || password == null) {
@@ -98,8 +99,8 @@ public class AuthController {
     }
 
     private void claimAccount(Context ctx) {
-        String studentId = ctx.formParam("studentId");
-        String birthdate = ctx.formParam("birthdate");
+        String studentId = SanitizerUtil.clean(ctx.formParam("studentId"));
+        String birthdate = SanitizerUtil.clean(ctx.formParam("birthdate"));
 
         if (studentId == null || birthdate == null) {
             ctx.status(400).result("Missing verification details.");
