@@ -7,20 +7,26 @@ import org.slf4j.LoggerFactory;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
-import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthController;
-import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthMiddleware;
-import dev.vertesix.credifyqr.Identity.adapters.inbound.web.PageController;
-import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteBlacklistRepository;
-import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteUserRepository;
-import dev.vertesix.credifyqr.Identity.core.domain.Role;
-import dev.vertesix.credifyqr.Identity.core.domain.User;
-import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
-import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
-import dev.vertesix.credifyqr.Identity.core.ports.UserRepository;
-import dev.vertesix.credifyqr.Identity.core.service.IdentityService;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.rendering.template.JavalinThymeleaf;
+
+import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthController;
+import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthMiddleware;
+import dev.vertesix.credifyqr.Identity.adapters.inbound.web.PageController;
+import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteUserRepository;
+import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteBlacklistRepository;
+import dev.vertesix.credifyqr.Identity.adapters.outbound.security.SecurePasswordAdapter;
+
+import dev.vertesix.credifyqr.Identity.core.domain.Role;
+import dev.vertesix.credifyqr.Identity.core.domain.User;
+
+import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
+import dev.vertesix.credifyqr.Identity.core.ports.PasswordGenerator;
+import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
+import dev.vertesix.credifyqr.Identity.core.ports.UserRepository;
+
+import dev.vertesix.credifyqr.Identity.core.service.IdentityService;
 
 
 public class App {
@@ -43,9 +49,10 @@ public class App {
 
         UserRepository userRepository = new SqliteUserRepository(dbUrl);
         TokenBlacklistRepository blacklistRepository = new SqliteBlacklistRepository(dbUrl);
+        PasswordGenerator passwordGenerator = new SecurePasswordAdapter();
 
         // 2. Core Service Initialization (Hexagonal Logic)
-        IdentityUseCase identityService = new IdentityService(userRepository);
+        IdentityUseCase identityService = new IdentityService(userRepository, passwordGenerator);
         
         // 3. Security & Controller Initialization
         AuthMiddleware.init(blacklistRepository); 
@@ -74,6 +81,11 @@ public class App {
         logger.info("CredifyQR Identity Service running on http://{}:{}", host, port);
 
         seedTestAccounts(identityService, userRepository);
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            logger.info("Shutdown signal received. Cleaning up...");
+            app.stop();
+        }));
 
         logger.info("System ready. All test accounts verified.");
     }

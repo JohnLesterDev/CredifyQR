@@ -2,12 +2,15 @@ package dev.vertesix.credifyqr.Identity.core.service;
 
 import dev.vertesix.credifyqr.Identity.core.domain.Role;
 import dev.vertesix.credifyqr.Identity.core.domain.User;
-import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
 import dev.vertesix.credifyqr.Identity.core.ports.UserRepository;
+import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
+import dev.vertesix.credifyqr.Identity.core.ports.PasswordGenerator;
 
 import java.nio.charset.StandardCharsets;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,9 +21,11 @@ import org.mindrot.jbcrypt.BCrypt;
 public class IdentityService implements IdentityUseCase {
 
     private final UserRepository userRepository;
+    private final PasswordGenerator passwordGenerator;
 
-    public IdentityService(UserRepository userRepository) {
+    public IdentityService(UserRepository userRepository, PasswordGenerator passwordGenerator) {
         this.userRepository = userRepository;
+        this.passwordGenerator = passwordGenerator;
     }
 
     @Override
@@ -71,7 +76,7 @@ public class IdentityService implements IdentityUseCase {
             throw new IllegalArgumentException("Verification failed. Invalid birthdate.");
         }
 
-        String tempPassword = UUID.randomUUID().toString().substring(0, 8);
+        String tempPassword = passwordGenerator.generate(12);
         
         user.setPasswordHash(hashPassword(tempPassword));
         user.setClaimed(true);

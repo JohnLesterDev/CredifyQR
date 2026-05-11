@@ -1,0 +1,18 @@
+#!/bin/bash
+# Handle Ctrl+C (SIGINT) by exiting the script entirely
+trap "echo -e '\n[SYSTEM] Termination received. Shutting down loop.'; exit" SIGINT SIGTERM
+
+while true; do
+    echo "[SYSTEM] Starting CredifyQR..."
+    ./gradlew run
+    EXIT_CODE=$?
+
+    # If code is 130, it was a manual Ctrl+C inside the app
+    if [ $EXIT_CODE -eq 130 ]; then
+        echo "[SYSTEM] Manual stop detected."
+        exit 0
+    fi
+
+    echo "[SYSTEM] App exited with code $EXIT_CODE. Restarting in 2s..."
+    sleep 2
+done

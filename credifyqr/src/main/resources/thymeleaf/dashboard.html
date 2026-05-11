@@ -1,8 +1,7 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" 
+      th:replace="~{base :: layout(~{::section}, ~{::style})}">
 <head>
-    <title>Dashboard - CredifyQR</title>
-    <link rel="stylesheet" th:href="@{/css/style.css}">
     <style>
         body { padding: 0; align-items: flex-start; justify-content: flex-start; }
         .dashboard-wrapper { display: flex; width: 100vw; min-height: 100vh; background: var(--bg-primary); }
@@ -30,10 +29,11 @@
     </style>
 </head>
 <body>
-    <div class="dashboard-wrapper">
+    <section class="dashboard-wrapper">
         <aside class="sidebar">
             <div class="sidebar-brand">
-                CTU<span>CredifyQR</span>
+                <img src="/img/credifyqr-draft-trans.png" alt="" style="height: 32px; width: auto;">
+                <span>CredifyQR</span>
             </div>
             <nav class="sidebar-nav">
                 <a href="#" class="active">Overview</a>
@@ -134,29 +134,28 @@
                 </div>
             </div>
 
-        </main>
-    </div>
-
-    <script>
-        async function handleLogout() {
-            await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
-            window.location.href = '/login';
-        }
-
-        async function testRoute(url) {
-            const resultDiv = document.getElementById('test-result');
-            try {
-                const resp = await fetch(url, { credentials: 'same-origin' });
-                const text = await resp.text();
-                if (resp.ok) {
-                    resultDiv.innerHTML = `<div class="success"><strong>System Response:</strong> ${text}</div>`;
-                } else {
-                    resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${text} (${resp.status})</div>`;
+            <script>
+                async function handleLogout() {
+                    await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+                    window.location.href = '/login';
                 }
-            } catch (e) {
-                resultDiv.innerHTML = `<div class="error"><strong>Exception:</strong> Request failed: ${e.message}</div>`;
-            }
-        }
-    </script>
+
+                async function testRoute(url) {
+                    const resultDiv = document.getElementById('test-result');
+                    try {
+                        const resp = await fetch(url, { credentials: 'same-origin' });
+                        const text = await resp.text();
+                        if (resp.ok) {
+                            resultDiv.innerHTML = `<div class="success"><strong>System Response:</strong> ${text}</div>`;
+                        } else {
+                            resultDiv.innerHTML = `<div class="error"><strong>Error:</strong> ${text} (${resp.status})</div>`;
+                        }
+                    } catch (e) {
+                        resultDiv.innerHTML = `<div class="error"><strong>Exception:</strong> Request failed: ${e.message}</div>`;
+                    }
+                }
+            </script>
+        </main>
+    </section>
 </body>
 </html>

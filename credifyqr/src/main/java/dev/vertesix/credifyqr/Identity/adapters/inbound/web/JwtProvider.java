@@ -4,7 +4,10 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import javax.crypto.SecretKey;
-import java.util.*;
+
+import java.util.Date;
+import java.util.UUID;
+
 
 public class JwtProvider {
     private static SecretKey KEY;
@@ -17,15 +20,18 @@ public class JwtProvider {
         KEY = Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    public static String createToken(String userId, String role) {
+    public static String createToken(String userId, String role, boolean rememberMe) {
         if (KEY == null) throw new IllegalStateException("JwtProvider not initialized with a secret.");
+        
+        // 30 days if remembered, 1 hour if not.
+        long expirationMillis = rememberMe ? 30L * 24 * 60 * 60 * 1000 : 3600000L;
         
         return Jwts.builder()
             .id(UUID.randomUUID().toString()) 
             .subject(userId)
             .claim("role", role)
             .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + 3600000)) // 1 hour
+            .expiration(new Date(System.currentTimeMillis() + expirationMillis))
             .signWith(KEY)
             .compact();
     }

@@ -18,7 +18,6 @@ public class AuthController {
     private final IdentityUseCase identityUseCase;
     private final TokenBlacklistRepository blacklistRepository;
 
-    // UPDATED CONSTRUCTOR TO MATCH App.java
     public AuthController(IdentityUseCase identityUseCase, TokenBlacklistRepository blacklistRepository) {
         this.identityUseCase = identityUseCase;
         this.blacklistRepository = blacklistRepository;
@@ -35,6 +34,7 @@ public class AuthController {
     private void login(Context ctx) {
         String username = SanitizerUtil.clean(ctx.formParam("username"));
         String password = ctx.formParam("password");
+        boolean rememberMe = Boolean.parseBoolean(ctx.formParam("rememberMe"));
 
         if (username == null || password == null) {
             ctx.status(400).result("Missing credentials");
@@ -45,13 +45,20 @@ public class AuthController {
 
         if (authenticatedUser.isPresent()) {
             User user = authenticatedUser.get();
-            // Issue a signed JWT instead of a plain-text role cookie
-            String token = JwtProvider.createToken(user.getId(), user.getRole().name());
+            String token = JwtProvider.createToken(user.getId(), user.getRole().name(), rememberMe);
+            
             Cookie jwtCookie = new Cookie("auth_token", token);
-            jwtCookie.setHttpOnly(true);   // Prevents XSS from stealing the token
-            jwtCookie.setSecure(false);     // Set to TRUE only once you have SSL/HTTPS
-            jwtCookie.setSameSite(SameSite.STRICT); // Mitigates CSRF attacks
+            jwtCookie.setHttpOnly(true);
+            jwtCookie.setSecure(false); // Set to TRUE when SSL/HTTPS is active
+            jwtCookie.setSameSite(SameSite.STRICT);
             jwtCookie.setPath("/");
+            
+            // If rememberMe is true, persist the cookie for 30 days (in seconds).
+            // Otherwise, do not set maxAge, making it a transient session cookie.
+            if (rememberMe) {
+                jwtCookie.setMaxAge(30 * 24 * 60 * 60); 
+            }
+            
             ctx.cookie(jwtCookie);
             ctx.status(200).result("Login successful");
         } else {
@@ -59,16 +66,14 @@ public class AuthController {
         }
     }
 
-    // SINGLE REFACTORED LOGOUT METHOD
     private void logout(Context ctx) {
         String token = ctx.cookie("auth_token");
         if (token != null) {
             try {
                 Claims claims = JwtProvider.validateToken(token);
-                // Push JTI to SQLite blacklist to invalidate the session 
                 blacklistRepository.blacklist(claims.getId(), claims.getExpiration().getTime());
             } catch (Exception ignored) {
-                // Token might be malformed or expired; proceed with cookie removal
+                // TODO:
             }
         }
         ctx.removeCookie("auth_token");
@@ -118,7 +123,6 @@ public class AuthController {
     }
 
     public void changePassword(Context ctx) {
-        // userId should be extracted from the JWT attribute set in AuthMiddleware
         String userId = ctx.attribute("userId"); 
         String newPassword = ctx.formParam("newPassword");
 
