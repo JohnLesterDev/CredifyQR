@@ -31,6 +31,8 @@ public class IdentityService implements IdentityUseCase {
     @Override
     public Optional<User> authenticate(String username, String password) {
         return userRepository.findByUsername(username)
+            .filter(User::isClaimed) 
+            .filter(user -> !user.getPasswordHash().isEmpty())
             .filter(user -> BCrypt.checkpw(password, user.getPasswordHash()));
     }
 

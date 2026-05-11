@@ -1,20 +1,19 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" th:fragment="layout(content, extraHead)">
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="layout(content, extraHead, isAdmin)">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CredifyQR: Automated Academic Issuance & Verification System</title>
+    <title th:text="${isAdmin} ? 'CredifyQR | Administration' : 'CredifyQR | Student Portal'"></title>
     
-    <link rel="icon" type="image/png" th:href="@{/img/credifyqr-logo-resized.png}">
+    <link rel="icon" type="image/png" 
+          th:href="${isAdmin} ? @{/img/credifyqr-logo-admin.png} : @{/img/credifyqr-logo-resized.png}">
     
     <link rel="stylesheet" th:href="@{/css/style.css}">
     
     <th:block th:replace="${extraHead} ?: ~{}"></th:block>
 </head>
 <body>
-
     <th:block th:replace="${content}"></th:block>
-
     <script src="/js/app.js"></script>
 </body>
 </html>

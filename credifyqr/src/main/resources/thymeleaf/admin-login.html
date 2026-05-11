@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" 
+      th:replace="~{base :: layout(~{::section}, ~{::style}, true)}">
+<head>
+    <style>
+        :root {
+            --accent: #f39c12;
+            --accent-hover: #e67e22;
+        }
+
+        .pwd-wrapper { position: relative; display: flex; align-items: center; }
+        .pwd-wrapper input { padding-right: 40px; width: 100%; }
+        .eye-btn { position: absolute; right: 12px; width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer; user-select: none; display: flex; }
+        .eye-btn:hover { color: var(--text-primary); }
+        .eye-btn svg { width: 100%; height: 100%; }
+        
+        .remember-me { display: flex; align-items: center; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-secondary); cursor: pointer; user-select: none; position: relative; }
+        .remember-me input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
+        .checkmark { height: 18px; width: 18px; background-color: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; margin-right: 10px; position: relative; transition: all 0.2s ease; }
+        .remember-me:hover input ~ .checkmark { border-color: var(--accent); }
+        .remember-me input:checked ~ .checkmark { background-color: var(--accent); border-color: var(--accent); }
+        .checkmark:after { content: ""; position: absolute; display: none; left: 5px; top: 1px; width: 4px; height: 9px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+        .remember-me input:checked ~ .checkmark:after { display: block; }
+        
+        .brand-header h2 { color: var(--accent); } 
+    </style>
+</head>
+<body>
+    <section class="container auth-container">
+        <div class="brand-header">
+            <img src="/img/credifyqr-logo-admin.png" alt="CredifyQR Logo" class="brand-logo">
+            <h2 id="panel-title">System Administration</h2>
+        </div>
+        
+        <form id="login-panel" onsubmit="event.preventDefault(); handleLogin();">
+            <div class="form-group">
+                <label>Staff Username / Email</label>
+                <input type="text" th:id="'u_' + ${nonce}" th:name="'u_' + ${nonce}" data-target="login-user" autocomplete="new-password" required>
+            </div>
+            <div class="form-group">
+                <label>Passphrase</label>
+                <div class="pwd-wrapper">
+                    <input type="password" th:id="'p_' + ${nonce}" th:name="'p_' + ${nonce}" data-target="login-pass" autocomplete="new-password" required>
+                    <div class="eye-btn" onmousedown="revealPwd(this)" onmouseup="hidePwd(this)" onmouseleave="hidePwd(this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                    </div>
+                </div>
+            </div>
+            <label class="remember-me">
+                <input type="checkbox" id="remember-me" name="rememberMe">
+                <span class="checkmark"></span>
+                Remember Me
+            </label>
+            <button type="submit" style="width: 100%;">Secure Login</button>
+            <p class="auth-toggle" style="margin-top: 1.5rem; font-size: 0.8rem;">
+                <a href="/login">&larr; Return to Student Portal</a>
+            </p>
+            <div id="login-error" class="error hidden"></div>
+        </form>
+
+        <script>
+            const svgEyeClosed = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+            const svgEyeOpen = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const savedUser = localStorage.getItem('credify_staff_id');
+                if (savedUser) {
+                    document.querySelector('input[data-target="login-user"]').value = savedUser;
+                    document.getElementById('remember-me').checked = true;
+                }
+            });
+
+            function revealPwd(btn, e) {
+                if (e) e.preventDefault();
+                btn.previousElementSibling.type = 'text';
+                btn.innerHTML = svgEyeOpen;
+            }
+
+            function hidePwd(btn) {
+                btn.previousElementSibling.type = 'password';
+                btn.innerHTML = svgEyeClosed;
+            }
+
+            async function handleLogin() {
+                const username = document.querySelector('input[data-target="login-user"]').value;
+                const password = document.querySelector('input[data-target="login-pass"]').value;
+                const rememberMe = document.getElementById('remember-me').checked;
+                const errorEl = document.getElementById('login-error');
+
+                if (rememberMe) {
+                    localStorage.setItem('credify_staff_id', username);
+                } else {
+                    localStorage.removeItem('credify_staff_id');
+                }
+                
+                errorEl.textContent = '';
+                errorEl.classList.add('hidden');
+                
+                try {
+                    const formData = new URLSearchParams();
+                    formData.append('username', username);
+                    formData.append('password', password);
+                    formData.append('rememberMe', rememberMe);
+                    
+                    const resp = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData,
+                        credentials: 'same-origin'
+                    });
+                    
+                    if (resp.ok) {
+                        window.location.href = '/dashboard';
+                    } else {
+                        errorEl.textContent = await resp.text();
+                        errorEl.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    errorEl.textContent = 'Login failed';
+                    errorEl.classList.remove('hidden');
+                }
+            }
+        </script>
+    </section>
+</body>
+</html>

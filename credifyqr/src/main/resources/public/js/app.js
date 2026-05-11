@@ -71,3 +71,15 @@ async function logout() {
         window.location.href = '/login.html';
     }
 }
+
+// Global UI Restrictions
+document.addEventListener('DOMContentLoaded', () => {
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+
+    document.querySelectorAll('input').forEach(el => {
+        ['copy', 'paste', 'cut', 'dragstart', 'drop'].forEach(ev => {
+            el.addEventListener(ev, e => e.preventDefault());
+        });
+    });
+});

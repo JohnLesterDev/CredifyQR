@@ -41,6 +41,14 @@ public class AuthController {
             return;
         }
 
+        String referer = ctx.header("Referer");
+        if (referer != null && !referer.contains("/admin")) {
+            if (!username.matches("\\d+")) {
+                ctx.status(400).result("Credential ID must be numeric.");
+                return;
+            }
+        }
+
         Optional<User> authenticatedUser = identityUseCase.authenticate(username, password);
 
         if (authenticatedUser.isPresent()) {
@@ -49,7 +57,7 @@ public class AuthController {
             
             Cookie jwtCookie = new Cookie("auth_token", token);
             jwtCookie.setHttpOnly(true);
-            jwtCookie.setSecure(false); // Set to TRUE when SSL/HTTPS is active
+            jwtCookie.setSecure(false);
             jwtCookie.setSameSite(SameSite.STRICT);
             jwtCookie.setPath("/");
             

@@ -21,6 +21,7 @@ public class PageController {
     public void registerRoutes(Javalin app) {
         app.get("/", this::landing);
         app.get("/login", this::showLogin);
+        app.get("/admin", this::showAdminLogin);
         app.get("/dashboard", this::showDashboard);
         app.get("/force-password-change", this::showForcePasswordChange);
     }
@@ -105,5 +106,18 @@ public class PageController {
         }
 
         ctx.render("force-password-change");
+    }
+
+    private void showAdminLogin(Context ctx) {        
+        if (isValidSession(ctx)) {
+            ctx.redirect("/dashboard");
+            return;
+        }
+        
+        String nonce = java.util.UUID.randomUUID().toString().substring(0, 8);
+        Map<String, Object> model = new HashMap<>();
+        model.put("nonce", nonce);
+        
+        ctx.render("admin-login", model);
     }
 }
