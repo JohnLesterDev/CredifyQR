@@ -17,6 +17,12 @@
         .sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
         .sidebar-nav a { display: block; padding: 12px 16px; color: var(--text-secondary); border-radius: 8px; transition: all 0.2s; font-weight: 500; border: 1px solid transparent; }
         .sidebar-nav a:hover, .sidebar-nav a.active { background: rgba(108, 92, 231, 0.1); color: var(--text-primary); border-color: rgba(108, 92, 231, 0.3); text-decoration: none; }
+        
+        /* Tab Buttons */
+        .tab-btn { display: block; padding: 12px 16px; color: var(--text-secondary); border-radius: 8px; transition: all 0.2s; font-weight: 500; border: 1px solid transparent; background: transparent; cursor: pointer; text-align: left; font-size: 1rem; }
+        .tab-btn:hover, .tab-btn.active { background: rgba(108, 92, 231, 0.1); color: var(--text-primary); border-color: rgba(108, 92, 231, 0.3); text-decoration: none; }
+        .admin-theme .tab-btn:hover, .admin-theme .tab-btn.active { background: rgba(243, 156, 18, 0.1); border-color: rgba(243, 156, 18, 0.3); }
+
         .main-content { flex: 1; padding: 2.5rem 4rem; overflow-y: auto; }
         .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
         .user-meta h2 { margin: 0; font-size: 1.8rem; }
@@ -41,7 +47,6 @@
             <nav class="sidebar-nav">
                 <a href="#" class="active">Overview</a>
                 <a href="#" onclick="testRoute('/api/session')">Session Diagnostics</a>
-                <!-- Logs out and defers routing to PageController -->
                 <a href="#" style="margin-top: auto; color: var(--danger);" onclick="handleLogout()">Sign Out</a>
             </nav>
         </aside>
@@ -56,61 +61,94 @@
 
             <div id="test-result" style="margin-bottom: 1.5rem;"></div>
 
-            <div class="data-section" th:if="${role == 'CAMPUS_DIRECTOR'}">
-                <h3>Institutional Configuration</h3>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                            Current Email Domain: <span id="current-domain-display" class="domain-tag">Loading...</span>
-                        </p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 5px;">This domain is appended to all newly provisioned Registrar identities.</p>
-                    </div>
-                    <button class="secondary" onclick="openDomainModal(false)">Modify Domain</button>
-                </div>
+            <div th:if="${role == 'SYSTEM_ADMIN'}" style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; padding-bottom: 1rem;">
+                <button class="tab-btn active" onclick="switchTab('overview')">System Overview</button>
+                <button class="tab-btn" onclick="switchTab('users')">User Management</button>
+                <button class="tab-btn" onclick="clearAppStorage()" style="margin-left: auto; background: rgba(231, 76, 60, 0.1); border-color: rgba(231, 76, 60, 0.3); color: var(--danger);">Hard Reset Storage</button>
             </div>
 
-            <div class="data-section" th:if="${role == 'REGISTRAR_STAFF' or role == 'CAMPUS_DIRECTOR'}">
-                <h3>Account Provisioning Pipeline</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
-                    Staging new identities. All accounts are created in an <span style="color: var(--accent)">Unclaimed</span> state.
-                </p>
-                
-                <form id="provision-form" onsubmit="event.preventDefault(); handleProvisioning();" style="max-width: 500px;">
-                    <div class="form-group">
-                        <label>Identifier / Prefix</label>
-                        <div style="display: flex; gap: 5px; align-items: center;">
-                            <input type="text" id="prov-username" required placeholder="ID number or name prefix">
-                            <span id="domain-suffix" style="color: var(--text-secondary); font-family: monospace; display: none;"></span>
+            <div id="tab-overview">
+                <div class="data-section" th:if="${role == 'SYSTEM_ADMIN'}">
+                    <h3>Institutional Configuration</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                                Current Email Domain: <span id="current-domain-display" class="domain-tag">Loading...</span>
+                            </p>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 5px;">Required for provisioning Registrar Staff.</p>
                         </div>
+                        <button class="secondary" onclick="openDomainModal(false)">Modify Domain</button>
                     </div>
-                    <div class="form-group">
-                        <label>System Role</label>
-                        <select id="prov-role" required onchange="updateProvUI(this.value)">
-                            <option value="STUDENT" th:if="${role == 'REGISTRAR_STAFF'}">Student</option>
-                            <option value="REGISTRAR_STAFF" th:if="${role == 'CAMPUS_DIRECTOR'}">Registrar Staff</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="prov-dob-group">
-                        <label>Verification Birthdate</label>
-                        <input type="date" id="prov-dob">
-                    </div>
-                    <button type="submit" id="prov-btn">Provision Identity</button>
-                    <div id="prov-error" class="error hidden"></div>
-                </form>
+                </div>
 
-                <div id="prov-result" class="temp-credential-card hidden" style="max-width: 500px; margin-top: 1.5rem;">
-                    <div class="credential-header">Account Staged Successfully</div>
-                    <p class="credential-warning">Direct the user to the portal's "Claim Account" workflow using the identifier below.</p>
-                    <div class="credential-value" id="prov-final-id" style="font-size: 1.1rem; letter-spacing: 1px;"></div>
+                <div class="data-section" th:if="${role == 'REGISTRAR_STAFF' or role == 'SYSTEM_ADMIN'}">
+                    <h3>Student Provisioning Pipeline</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                        Staging new student identities. Accounts are created in an <span style="color: var(--accent)">Unclaimed</span> state.
+                    </p>
+                    <form id="student-prov-form" onsubmit="event.preventDefault(); handleProvisioning('STUDENT');" style="max-width: 500px;">
+                        <div class="form-group">
+                            <label>8-Digit Student ID</label>
+                            <input type="text" id="prov-student-id" required pattern="\d{8}" maxlength="8" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
+                        </div>
+                        <div class="form-group">
+                            <label>Verification Birthdate</label>
+                            <input type="date" id="prov-student-dob" required>
+                        </div>
+                        <button type="submit">Provision Student Identity</button>
+                        <div id="student-prov-error" class="error hidden"></div>
+                    </form>
+                    <div id="student-prov-result" class="temp-credential-card hidden" style="max-width: 500px; margin-top: 1.5rem;">
+                        <div class="credential-header">Account Staged Successfully</div>
+                        <div class="credential-value" id="prov-final-student-id" style="font-size: 1.1rem; letter-spacing: 1px;"></div>
+                        <p class="credential-warning">Direct the student to claim this account.</p>
+                    </div>
+                </div>
+
+                <div th:if="${role == 'STUDENT'}" class="data-section">
+                    <h3>Academic Credentials</h3>
+                    <p>Digital documents officially issued and ready for external verification.</p>
                 </div>
             </div>
-            
-            <div th:if="${role == 'STUDENT'}" class="data-section">
-                <h3>Academic Credentials</h3>
-                <p>Digital documents officially issued and ready for external verification.</p>
+
+            <div id="tab-users" style="display: none;" th:if="${role == 'SYSTEM_ADMIN'}">
+                
+                <div class="data-section">
+                    <h3>Deploy Employee Identity</h3>
+                    <form id="staff-prov-form" onsubmit="event.preventDefault(); handleStaffProvisioning();" style="display: flex; gap: 1rem; align-items: flex-end;">
+                        <div class="form-group" style="flex: 1; margin: 0;">
+                            <label>System Role</label>
+                            <select id="prov-staff-role" required>
+                                <option value="REGISTRAR_STAFF">Registrar Staff</option>
+                                <option value="CAMPUS_DIRECTOR">Campus Director</option>
+                            </select>
+                        </div>
+                        <button type="submit" style="margin: 0;">Generate & Provision</button>
+                    </form>
+                    <div id="staff-prov-result" class="temp-credential-card hidden">
+                        <div class="credential-header">Employee Account Staged</div>
+                        <div class="credential-value" id="prov-final-staff-id" style="font-size: 1.5rem;"></div>
+                        <p class="credential-warning" style="margin:0;">Direct staff to claim this account using their linked email.</p>
+                    </div>
+                </div>
+
+                <div class="data-section">
+                    <h3>System Roster</h3>
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <th style="padding: 10px;">Identifier</th>
+                                <th style="padding: 10px;">Role</th>
+                                <th style="padding: 10px;">Email</th>
+                                <th style="padding: 10px;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-table-body">
+                            </tbody>
+                    </table>
+                </div>
             </div>
 
-            <!-- Domain Update Modal -->
             <div id="domain-modal" class="modal-overlay" onclick="closeDomainModal(event)">
                 <div class="modal-card" onclick="event.stopPropagation()">
                     <h3>Change Domain</h3>
@@ -121,7 +159,7 @@
                             <input type="text" id="new-domain-input" placeholder="e.g. university.edu.ph" required>
                         </div>
                         <div class="form-group">
-                            <label>Confirm Director Password</label>
+                            <label>Confirm Administrator Password</label>
                             <input type="password" id="director-confirm-pwd" required>
                         </div>
                         <div style="display: flex; gap: 10px;">
@@ -139,10 +177,9 @@
                 let isModalForced = false;
 
                 document.addEventListener('DOMContentLoaded', async () => {
-                    await fetchDomain();
-                    
-                    const roleSelect = document.getElementById('prov-role');
-                    if (roleSelect) updateProvUI(roleSelect.value);
+                    if (currentRole === 'SYSTEM_ADMIN') {
+                        await fetchDomain();
+                    }
                 });
 
                 async function fetchDomain() {
@@ -152,7 +189,7 @@
                     const display = document.getElementById('current-domain-display');
                     if (display) display.textContent = globalDomain || "NOT SET";
 
-                    if (!globalDomain && currentRole === 'CAMPUS_DIRECTOR') {
+                    if (!globalDomain && currentRole === 'SYSTEM_ADMIN') {
                         openDomainModal(true);
                     }
                 }
@@ -164,7 +201,7 @@
                 }
 
                 function closeDomainModal(e) { 
-                    if (isModalForced) return; // Cannot be closed until provisioned
+                    if (isModalForced) return; 
                     if (!e || e.target.id === 'domain-modal' || e.type === 'click') {
                         document.getElementById('domain-modal').style.display = 'none';
                         document.getElementById('modal-error').classList.add('hidden');
@@ -181,7 +218,6 @@
                     btn.disabled = true;
                     btn.textContent = "Verifying...";
                     
-                    // CRITICAL FIX: URLSearchParams correctly handles POST x-www-form-urlencoded
                     const formData = new URLSearchParams();
                     formData.append('domain', newDomain);
                     formData.append('password', pwd);
@@ -210,31 +246,11 @@
                     }
                 }
 
-                function updateProvUI(roleType) {
-                    const suffix = document.getElementById('domain-suffix');
-                    const dobGroup = document.getElementById('prov-dob-group');
-                    const dobInput = document.getElementById('prov-dob');
-
-                    if (roleType === 'REGISTRAR_STAFF' && globalDomain) {
-                        suffix.textContent = '@' + globalDomain;
-                        suffix.style.display = 'inline';
-                        dobGroup.style.display = 'none';
-                        dobInput.required = false;
-                    } else {
-                        suffix.style.display = 'none';
-                        dobGroup.style.display = 'block';
-                        dobInput.required = true;
-                    }
-                }
-
-                async function handleProvisioning() {
-                    const btn = document.getElementById('prov-btn');
-                    const errorEl = document.getElementById('prov-error');
-                    const resultCard = document.getElementById('prov-result');
-                    
-                    const username = document.getElementById('prov-username').value;
-                    const roleType = document.getElementById('prov-role').value;
-                    const dob = document.getElementById('prov-dob').value;
+                async function handleProvisioning(roleType) {
+                    const errorEl = document.getElementById('student-prov-error');
+                    const resultCard = document.getElementById('student-prov-result');
+                    const username = document.getElementById('prov-student-id').value;
+                    const dob = document.getElementById('prov-student-dob').value;
 
                     errorEl.classList.add('hidden');
                     resultCard.classList.add('hidden');
@@ -242,29 +258,100 @@
                     const formData = new URLSearchParams();
                     formData.append('username', username);
                     formData.append('role', roleType);
-                    if (dob) formData.append('birthdate', dob);
+                    formData.append('birthdate', dob);
 
-                    const resp = await fetch('/api/admin/users', {
-                        method: 'POST',
-                        body: formData,
-                        credentials: 'same-origin'
-                    });
+                    try {
+                        const resp = await fetch('/api/admin/users', {
+                            method: 'POST',
+                            body: formData,
+                            credentials: 'same-origin'
+                        });
 
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        document.getElementById('prov-final-id').textContent = data.username;
-                        resultCard.classList.remove('hidden');
-                        document.getElementById('provision-form').reset();
-                        updateProvUI(roleType);
-                    } else {
-                        errorEl.textContent = await resp.text();
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            document.getElementById('prov-final-student-id').textContent = data.username;
+                            resultCard.classList.remove('hidden');
+                            document.getElementById('student-prov-form').reset();
+                        } else {
+                            errorEl.textContent = await resp.text();
+                            errorEl.classList.remove('hidden');
+                        }
+                    } catch (e) {
+                        errorEl.textContent = "Provisioning failed due to network error.";
                         errorEl.classList.remove('hidden');
+                    }
+                }
+
+                function switchTab(tabId) {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    event.target.classList.add('active');
+                    document.getElementById('tab-overview').style.display = tabId === 'overview' ? 'block' : 'none';
+                    document.getElementById('tab-users').style.display = tabId === 'users' ? 'block' : 'none';
+                    if (tabId === 'users') loadUserTable();
+                }
+
+                async function loadUserTable() {
+                    const tbody = document.getElementById('user-table-body');
+                    tbody.innerHTML = '<tr><td colspan="4">Loading roster...</td></tr>';
+                    try {
+                        const res = await fetch('/api/admin/users');
+                        if (res.ok) {
+                            const users = await res.json();
+                            tbody.innerHTML = users.map(u => `
+                                <tr style="border-bottom: 1px solid var(--border);">
+                                    <td style="padding: 10px;">${u.username}</td>
+                                    <td style="padding: 10px;"><span class="role-badge">${u.role}</span></td>
+                                    <td style="padding: 10px; color: var(--text-secondary);">${u.email}</td>
+                                    <td style="padding: 10px;">${u.status}</td>
+                                </tr>
+                            `).join('');
+                        }
+                    } catch (e) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load roster.</td></tr>';
+                    }
+                }
+
+                async function handleStaffProvisioning() {
+                    if (!globalDomain) {
+                        alert("Cannot provision staff. Institutional domain is not set.");
+                        return;
+                    }
+
+                    // Generate random 8-digit Employee ID prefix
+                    const prefix = Math.floor(10000000 + Math.random() * 90000000).toString();
+                    const role = document.getElementById('prov-staff-role').value;
+                    
+                    const formData = new URLSearchParams();
+                    formData.append('username', prefix);
+                    formData.append('role', role);
+                    formData.append('birthdate', '1990-01-01');
+
+                    try {
+                        const resp = await fetch('/api/admin/users', { method: 'POST', body: formData });
+                        if (resp.ok) {
+                            const data = await resp.json();
+                            document.getElementById('prov-final-staff-id').textContent = data.username;
+                            document.getElementById('staff-prov-result').classList.remove('hidden');
+                            loadUserTable();
+                        } else {
+                            alert(await resp.text());
+                        }
+                    } catch (e) {
+                        alert("Provisioning failed.");
+                    }
+                }
+
+                async function clearAppStorage() {
+                    if(confirm("This will wipe local storage and attempt to clear cookies. You will be logged out. Continue?")) {
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        await fetch('/api/admin/clear-cache', { method: 'POST' });
+                        window.location.href = '/';
                     }
                 }
 
                 async function handleLogout() {
                     await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
-                    // Routing is handled by the PageController based on the portal_pref cookie
                     window.location.href = '/'; 
                 }
 

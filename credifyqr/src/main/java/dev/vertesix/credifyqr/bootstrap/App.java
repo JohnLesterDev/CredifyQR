@@ -1,119 +1,109 @@
 package dev.vertesix.credifyqr.bootstrap;
 
-import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.thymeleaf.TemplateEngine;
-import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
-
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.rendering.template.JavalinThymeleaf;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
-import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthController;
-import dev.vertesix.credifyqr.Identity.adapters.inbound.web.AuthMiddleware;
-import dev.vertesix.credifyqr.Identity.adapters.inbound.web.PageController;
-import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteUserRepository;
-import dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteBlacklistRepository;
+import dev.vertesix.credifyqr.Identity.adapters.inbound.web.*;
+import dev.vertesix.credifyqr.Identity.adapters.outbound.db.*;
 import dev.vertesix.credifyqr.Identity.adapters.outbound.security.SecurePasswordAdapter;
-
 import dev.vertesix.credifyqr.Identity.core.domain.Role;
 import dev.vertesix.credifyqr.Identity.core.domain.User;
-
-import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
-import dev.vertesix.credifyqr.Identity.core.ports.PasswordGenerator;
-import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
-import dev.vertesix.credifyqr.Identity.core.ports.UserRepository;
-
+import dev.vertesix.credifyqr.Identity.core.ports.*;
 import dev.vertesix.credifyqr.Identity.core.service.IdentityService;
+
+import java.util.UUID;
 
 public class App {
     private static final Logger logger = LoggerFactory.getLogger(App.class);
 
     public static void main(String[] args) {
         Dotenv dotenv = Dotenv.configure().load();
-
         String dbUrl = dotenv.get("DB_URL", "jdbc:sqlite:credifyqr.db");
         String jwtSecret = dotenv.get("JWT_SECRET");
 
-        String host = dotenv.get("HOST", "localhost");
-        int port = Integer.parseInt(dotenv.get("PORT", "5555"));
-
         if (jwtSecret == null || jwtSecret.isBlank()) {
-            throw new RuntimeException("FATAL: JWT_SECRET environment variable is missing.");
+            throw new RuntimeException("FATAL: JWT_SECRET is missing.");
         }
 
-        dev.vertesix.credifyqr.Identity.adapters.inbound.web.JwtProvider.init(jwtSecret);
+        // 1. Initialize Infrastructure
+        DatabaseConnection.init(dbUrl);
+        JwtProvider.init(jwtSecret);
 
-        UserRepository userRepository = new SqliteUserRepository(dbUrl);
-        dev.vertesix.credifyqr.Identity.core.ports.SettingsRepository settingsRepository = new dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteSettingsRepository(dbUrl);
-        TokenBlacklistRepository blacklistRepository = new SqliteBlacklistRepository(dbUrl);
+        // 2. Initialize Adapters (No longer passing dbUrl)
+        UserRepository userRepository = new SqliteUserRepository();
+        SettingsRepository settingsRepository = new SqliteSettingsRepository();
+        TokenBlacklistRepository blacklistRepository = new SqliteBlacklistRepository();
         PasswordGenerator passwordGenerator = new SecurePasswordAdapter();
 
-        // 2. Core Service Initialization
+        // 3. Core Service & Controller Initialization
         IdentityUseCase identityService = new IdentityService(userRepository, settingsRepository, passwordGenerator);
-        
-        // 3. Security & Controller Initialization
         AuthMiddleware.init(blacklistRepository); 
         AuthController authController = new AuthController(identityService, blacklistRepository);
         PageController pageController = new PageController(identityService);
 
-        // 4. Javalin Configuration
+        // 4. Javalin Setup
         Javalin app = Javalin.create(config -> {
             config.showJavalinBanner = false;
             config.fileRenderer(new JavalinThymeleaf(createTemplateEngine()));
             config.staticFiles.add("/public", io.javalin.http.staticfiles.Location.CLASSPATH);
-            
-            // Hardening: Prevent CSRF/Clickjacking via headers if needed
             config.http.defaultContentType = "text/html; charset=UTF-8";
-        }).start(host, port);
+        }).start(dotenv.get("HOST", "localhost"), Integer.parseInt(dotenv.get("PORT", "5555")));
 
-        // 5. Route Registration
+        // 5. Routes
         authController.registerRoutes(app);
         pageController.registerRoutes(app); 
 
-        // 6. Role-Based Access Control (RBAC) Interceptors
+        // 6. RBAC Overhaul
         app.before("/api/student/*", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
         app.before("/api/change-password", ctx -> AuthMiddleware.requireRole(ctx, Role.values()));
-        app.before("/api/admin/*", ctx -> AuthMiddleware.requireRole(ctx, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
+        
+        // SysAdmin restricted routes
+        app.before("/api/admin/settings/*", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN));
+        
+        // Provisioning logic: Staff creation (SysAdmin only), Student creation (Registrar/SysAdmin)
+        app.before("/api/admin/users", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN, Role.REGISTRAR_STAFF));
 
-        logger.info("CredifyQR Identity Service running on http://{}:{}", host, port);
+        seedSystem(identityService, userRepository);
 
-        seedTestAccounts(identityService, userRepository);
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            logger.info("Shutdown signal received. Cleaning up...");
-            app.stop();
-        }));
-
-        logger.info("System ready. All test accounts verified.");
+        logger.info("CredifyQR Overhaul Complete. System is live.");
     }
 
-    private static void seedTestAccounts(IdentityUseCase service, UserRepository repo) {
-        String[][] testAccounts = {
-            {"director_admin", "password123", "CAMPUS_DIRECTOR"},
-            {"registrar_staff", "password123", "REGISTRAR_STAFF"},
-            {"student_01", "password123", "STUDENT"}
-        };
-
-        for (String[] acc : testAccounts) {
-            try {
-                service.registerUser(acc[0], acc[1], acc[2]);
-            } catch (IllegalArgumentException e) {
-                // Ignore duplicates if DB wasn't wiped
-            }
+    private static void seedSystem(IdentityUseCase service, UserRepository repo) {
+        // Seed the MASTER SysAdmin if it doesn't exist
+        if (repo.findByUsername("admin_root").isEmpty()) {
+            User sysAdmin = new User(
+                UUID.randomUUID().toString(), 
+                "admin_root", 
+                "sysadmin@credify.edu.ph", 
+                org.mindrot.jbcrypt.BCrypt.hashpw("root1234", org.mindrot.jbcrypt.BCrypt.gensalt(12)), 
+                Role.SYSTEM_ADMIN, 
+                "2000-01-01", 
+                true, false, true
+            );
+            repo.save(sysAdmin);
+            logger.info("SYSTEM_ADMIN seeded. User: admin_root | Pwd: root1234");
         }
 
-        try {
-            if (repo.findByUsername("25001234").isEmpty()) {
-                // Fixed: Added `true` for isActive at the end of the constructor
-                User unclaimed = new User(UUID.randomUUID().toString(), "25001234", "", Role.STUDENT, "2000-01-01", false, true, true);
-                repo.save(unclaimed);
-                logger.info("Unclaimed test account seeded: 25001234");
-            }
-        } catch (Exception e) {
-            logger.error("Failed to seed unclaimed account", e);
+        // Restore the unclaimed student for the verification test pipeline
+        if (repo.findByUsername("25001234").isEmpty()) {
+            User unclaimedStudent = new User(
+                UUID.randomUUID().toString(),
+                "25001234",
+                null, // Email is null; not strictly required for Student claims
+                "",   // Empty password hash; will be generated during claim
+                Role.STUDENT,
+                "2000-01-01",
+                false, // isClaimed
+                true,  // needsPasswordReset
+                true   // isActive
+            );
+            repo.save(unclaimedStudent);
+            logger.info("Unclaimed test account seeded: 25001234 | DOB: 2000-01-01");
         }
     }
 

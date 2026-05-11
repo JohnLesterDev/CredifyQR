@@ -33,7 +33,7 @@
         
         <form id="login-panel" onsubmit="event.preventDefault(); handleLogin();">
             <div class="form-group">
-                <label>Staff Username / Email</label>
+                <label>Staff Username</label>
                 <input type="text" th:id="'u_' + ${nonce}" data-target="login-user" autocomplete="new-password" required>
             </div>
             <div class="form-group">
@@ -60,8 +60,12 @@
 
         <form id="claim-panel" class="hidden" onsubmit="event.preventDefault(); handleClaim();">
             <div class="form-group">
-                <label>Staff Email</label>
-                <input type="text" id="claim-id" placeholder="e.g. user@domain.edu.ph" required>
+                <label>Assigned Staff Username</label>
+                <input type="text" id="claim-id" placeholder="e.g. prefix@domain.edu.ph" required>
+            </div>
+            <div class="form-group">
+                <label>Linked / Recovery Email</label>
+                <input type="email" id="claim-email" placeholder="e.g. personal@gmail.com" required>
             </div>
             <div class="form-group">
                 <label>Verification Birthdate</label>
@@ -116,6 +120,7 @@
 
             async function handleClaim() {
                 const id = document.getElementById('claim-id').value;
+                const email = document.getElementById('claim-email').value;
                 const dob = document.getElementById('claim-dob').value;
                 const err = document.getElementById('claim-error');
                 const box = document.getElementById('temp-password-box');
@@ -126,10 +131,12 @@
 
                 try {
                     const formData = new URLSearchParams();
-                    formData.append('studentId', id); 
+                    formData.append('employeeId', id); 
+                    formData.append('email', email);
                     formData.append('birthdate', dob);
 
-                    const resp = await fetch('/api/claim-account', {
+                    // Note the updated endpoint routing here
+                    const resp = await fetch('/api/staff/claim-account', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: formData
@@ -170,6 +177,7 @@
                         btn.disabled = false;
                         document.getElementById('temp-password-box').classList.add('hidden');
                         document.getElementById('claim-id').value = '';
+                        document.getElementById('claim-email').value = '';
                         document.getElementById('claim-dob').value = '';
                     }, 1500);
                 }).catch(() => alert("Failed to copy. Please copy manually."));
