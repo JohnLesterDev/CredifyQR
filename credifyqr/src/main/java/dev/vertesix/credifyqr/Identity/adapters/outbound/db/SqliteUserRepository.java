@@ -24,7 +24,8 @@ public class SqliteUserRepository implements UserRepository {
                 role TEXT NOT NULL,
                 birthdate TEXT,
                 is_claimed INTEGER NOT NULL,
-                needs_password_reset INTEGER NOT NULL
+                needs_password_reset INTEGER NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1
             );
             """;
         try (Connection conn = DriverManager.getConnection(dbUrl);
@@ -69,8 +70,8 @@ public class SqliteUserRepository implements UserRepository {
 
     @Override
     public void save(User user) {
-        String sql = "INSERT INTO users(id, username, password_hash, role, birthdate, is_claimed, needs_password_reset) VALUES(?,?,?,?,?,?,?) " +
-                     "ON CONFLICT(id) DO UPDATE SET password_hash=excluded.password_hash, role=excluded.role, is_claimed=excluded.is_claimed, needs_password_reset=excluded.needs_password_reset";
+        String sql = "INSERT INTO users(id, username, password_hash, role, birthdate, is_claimed, needs_password_reset, is_active) VALUES(?,?,?,?,?,?,?,?) " +
+                     "ON CONFLICT(id) DO UPDATE SET password_hash=excluded.password_hash, role=excluded.role, is_claimed=excluded.is_claimed, needs_password_reset=excluded.needs_password_reset, is_active=excluded.is_active";
         try (Connection conn = DriverManager.getConnection(dbUrl);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, user.getId());
@@ -80,6 +81,7 @@ public class SqliteUserRepository implements UserRepository {
             pstmt.setString(5, user.getBirthdate());
             pstmt.setInt(6, user.isClaimed() ? 1 : 0);
             pstmt.setInt(7, user.needsPasswordReset() ? 1 : 0);
+            pstmt.setInt(8, user.isActive() ? 1 : 0);
             pstmt.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save user", e);
@@ -94,7 +96,8 @@ public class SqliteUserRepository implements UserRepository {
             Role.valueOf(rs.getString("role")),
             rs.getString("birthdate"),
             rs.getInt("is_claimed") == 1,
-            rs.getInt("needs_password_reset") == 1
+            rs.getInt("needs_password_reset") == 1,
+            rs.getInt("is_active") == 1
         );
     }
 }

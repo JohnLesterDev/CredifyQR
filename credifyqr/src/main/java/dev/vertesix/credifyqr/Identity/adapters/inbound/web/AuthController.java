@@ -3,6 +3,7 @@ package dev.vertesix.credifyqr.Identity.adapters.inbound.web;
 import java.util.Map;
 import java.util.Optional;
 
+import dev.vertesix.credifyqr.Identity.core.domain.Role;
 import dev.vertesix.credifyqr.Identity.core.domain.User;
 import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
 import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
@@ -29,6 +30,10 @@ public class AuthController {
         app.get("/api/session", this::session);
         app.post("/api/claim-account", this::claimAccount);
         app.post("/api/change-password", this::changePassword);
+        
+        app.post("/api/admin/users", this::provisionUser);
+        app.get("/api/admin/settings/domain", this::getDomain);
+        app.post("/api/admin/settings/domain", this::setDomain);
     }
 
     private void login(Context ctx) {
@@ -60,17 +65,17 @@ public class AuthController {
             jwtCookie.setSecure(false);
             jwtCookie.setSameSite(SameSite.STRICT);
             jwtCookie.setPath("/");
-            
-            // If rememberMe is true, persist the cookie for 30 days (in seconds).
-            // Otherwise, do not set maxAge, making it a transient session cookie.
-            if (rememberMe) {
-                jwtCookie.setMaxAge(30 * 24 * 60 * 60); 
-            }
-            
+            if (rememberMe) jwtCookie.setMaxAge(30 * 24 * 60 * 60); 
             ctx.cookie(jwtCookie);
+
+            Cookie prefCookie = new Cookie("portal_pref", user.getRole() == Role.STUDENT ? "student" : "admin");
+            prefCookie.setPath("/");
+            prefCookie.setMaxAge(365 * 24 * 60 * 60); // 1 year memory
+            ctx.cookie(prefCookie);
+
             ctx.status(200).result("Login successful");
         } else {
-            ctx.status(401).result("Invalid credentials");
+            ctx.status(401).result("Invalid credentials or account suspended.");
         }
     }
 
@@ -80,9 +85,7 @@ public class AuthController {
             try {
                 Claims claims = JwtProvider.validateToken(token);
                 blacklistRepository.blacklist(claims.getId(), claims.getExpiration().getTime());
-            } catch (Exception ignored) {
-                // TODO:
-            }
+            } catch (Exception ignored) { }
         }
         ctx.removeCookie("auth_token");
         ctx.status(200).result("Logged out and session revoked.");
@@ -99,6 +102,11 @@ public class AuthController {
             Optional<User> userOpt = identityUseCase.findById(claims.getSubject());
             if (userOpt.isPresent()) {
                 User u = userOpt.get();
+                if (!u.isActive()) {
+                    ctx.removeCookie("auth_token");
+                    ctx.status(403).json("Account is suspended.");
+                    return;
+                }
                 ctx.json(Map.of(
                     "id", u.getId(),
                     "username", u.getUsername(),
@@ -121,7 +129,7 @@ public class AuthController {
         }
 
         try {
-            String tempPassword = identityUseCase.claimStudentAccount(studentId, birthdate);
+            String tempPassword = identityUseCase.claimAccount(studentId, birthdate);
             ctx.status(200).result(tempPassword); 
         } catch (IllegalArgumentException e) {
             ctx.status(400).result(e.getMessage());
@@ -138,7 +146,6 @@ public class AuthController {
             ctx.status(401).result("Unauthorized.");
             return;
         }
-
         if (newPassword == null || newPassword.isBlank()) {
             ctx.status(400).result("Password cannot be empty.");
             return;
@@ -149,6 +156,74 @@ public class AuthController {
             ctx.status(200).result("Password updated successfully.");
         } catch (Exception e) {
             ctx.status(500).result("Update failed.");
+        }
+    }
+
+    private void provisionUser(Context ctx) {
+        String creatorId = ctx.attribute("userId");
+        if (creatorId == null) {
+            ctx.status(401).result("Unauthorized.");
+            return;
+        }
+
+        String newUsername = SanitizerUtil.clean(ctx.formParam("username"));
+        String roleStr = SanitizerUtil.clean(ctx.formParam("role"));
+        String birthdate = SanitizerUtil.clean(ctx.formParam("birthdate"));
+
+        if (newUsername == null || newUsername.isBlank() || roleStr == null || roleStr.isBlank()) {
+            ctx.status(400).result("Missing username or role.");
+            return;
+        }
+
+        try {
+            Role targetRole = Role.valueOf(roleStr.toUpperCase());
+            
+            if ((birthdate == null || birthdate.isBlank()) && targetRole != Role.STUDENT) {
+                birthdate = "1990-01-01"; 
+            } else if (birthdate == null || birthdate.isBlank()) {
+                ctx.status(400).result("Birthdate is required for provisioning Student accounts.");
+                return;
+            }
+
+            Map<String, Object> result = identityUseCase.provisionUser(creatorId, newUsername, birthdate, targetRole);
+            User provisionedUser = (User) result.get("user");
+            
+            ctx.status(201).json(Map.of(
+                "message", "User provisioned successfully",
+                "userId", provisionedUser.getId(),
+                "username", provisionedUser.getUsername(),
+                "role", provisionedUser.getRole().name()
+            ));
+
+        } catch (IllegalArgumentException | SecurityException e) {
+            ctx.status(400).result(e.getMessage());
+        } catch (Exception e) {
+            ctx.status(500).result("Internal provisioning error.");
+        }
+    }
+
+    private void getDomain(Context ctx) {
+        String domain = identityUseCase.getInstitutionDomain();
+        ctx.status(200).json(Map.of("domain", domain == null ? "" : domain));
+    }
+
+    private void setDomain(Context ctx) {
+        String directorId = ctx.attribute("userId");
+        String password = ctx.formParam("password");
+        String newDomain = SanitizerUtil.clean(ctx.formParam("domain"));
+
+        if (directorId == null || password == null || newDomain == null) {
+            ctx.status(400).result("Missing parameters.");
+            return;
+        }
+
+        try {
+            identityUseCase.updateInstitutionDomain(directorId, password, newDomain);
+            ctx.status(200).result("Domain locked successfully.");
+        } catch (SecurityException | IllegalArgumentException e) {
+            ctx.status(400).result(e.getMessage());
+        } catch (Exception e) {
+            ctx.status(500).result("Internal error.");
         }
     }
 }

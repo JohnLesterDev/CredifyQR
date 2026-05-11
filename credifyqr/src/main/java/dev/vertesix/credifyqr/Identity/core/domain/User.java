@@ -10,6 +10,9 @@ public class User {
     private final String birthdate; 
     private boolean isClaimed;
     private boolean needsPasswordReset;
+    
+    // Lifecycle state
+    private boolean isActive;
 
     public User(
         String id, 
@@ -18,7 +21,8 @@ public class User {
         Role role, 
         String birthdate, 
         boolean isClaimed, 
-        boolean needsPasswordReset
+        boolean needsPasswordReset,
+        boolean isActive
         ) {
         this.id = id;
         this.username = username;
@@ -27,6 +31,7 @@ public class User {
         this.birthdate = birthdate;
         this.isClaimed = isClaimed;
         this.needsPasswordReset = needsPasswordReset;
+        this.isActive = isActive;
     }
 
     public String getId() { return id; }
@@ -42,6 +47,9 @@ public class User {
     public void setNeedsPasswordReset(boolean needsPasswordReset) { 
         this.needsPasswordReset = needsPasswordReset; 
     }
+    
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { this.isActive = active; }
     
     public boolean isTemporary() { return needsPasswordReset; }
     

@@ -10,7 +10,6 @@ import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.jsonwebtoken.Claims;
 
-
 public class PageController {
     private final IdentityUseCase identityUseCase;
 
@@ -27,11 +26,11 @@ public class PageController {
     }
 
     private String getUserIdFromToken(Context ctx) {
-        String token = ctx.cookie("auth_token"); // Updated cookie name
+        String token = ctx.cookie("auth_token"); 
         if (token == null || token.isBlank()) return null;
         try {
             Claims claims = JwtProvider.validateToken(token);
-            return claims.getSubject(); // Extract the UUID
+            return claims.getSubject(); 
         } catch (Exception e) {
             return null;
         }
@@ -47,7 +46,12 @@ public class PageController {
         if (isValidSession(ctx)) {
             ctx.redirect("/dashboard");
         } else {
-            ctx.redirect("/login");
+            String pref = ctx.cookie("portal_pref");
+            if ("admin".equals(pref)) {
+                ctx.redirect("/admin");
+            } else {
+                ctx.redirect("/login");
+            }
         }
     }
 
@@ -56,12 +60,9 @@ public class PageController {
             ctx.redirect("/dashboard");
             return;
         }
-        
         String nonce = java.util.UUID.randomUUID().toString().substring(0, 8);
-        
         Map<String, Object> model = new HashMap<>();
         model.put("nonce", nonce);
-        
         ctx.render("login", model);
     }
 
@@ -69,14 +70,14 @@ public class PageController {
         String userId = getUserIdFromToken(ctx);
         if (userId == null) {
             ctx.removeCookie("auth_token");
-            ctx.redirect("/login");
+            ctx.redirect("/");
             return;
         }
 
         Optional<User> userOpt = identityUseCase.findById(userId);
         if (userOpt.isEmpty()) {
             ctx.removeCookie("auth_token");
-            ctx.redirect("/login");
+            ctx.redirect("/");
             return;
         }
         User user = userOpt.get();
@@ -95,7 +96,7 @@ public class PageController {
     private void showForcePasswordChange(Context ctx) {
         String userId = getUserIdFromToken(ctx);
         if (userId == null) {
-            ctx.redirect("/login");
+            ctx.redirect("/");
             return;
         }
 
@@ -113,11 +114,9 @@ public class PageController {
             ctx.redirect("/dashboard");
             return;
         }
-        
         String nonce = java.util.UUID.randomUUID().toString().substring(0, 8);
         Map<String, Object> model = new HashMap<>();
         model.put("nonce", nonce);
-        
         ctx.render("admin-login", model);
     }
 }

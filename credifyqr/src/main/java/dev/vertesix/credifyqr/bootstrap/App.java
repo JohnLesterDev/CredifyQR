@@ -28,7 +28,6 @@ import dev.vertesix.credifyqr.Identity.core.ports.UserRepository;
 
 import dev.vertesix.credifyqr.Identity.core.service.IdentityService;
 
-
 public class App {
     private static final Logger logger = LoggerFactory.getLogger(App.class);
 
@@ -48,11 +47,12 @@ public class App {
         dev.vertesix.credifyqr.Identity.adapters.inbound.web.JwtProvider.init(jwtSecret);
 
         UserRepository userRepository = new SqliteUserRepository(dbUrl);
+        dev.vertesix.credifyqr.Identity.core.ports.SettingsRepository settingsRepository = new dev.vertesix.credifyqr.Identity.adapters.outbound.db.SqliteSettingsRepository(dbUrl);
         TokenBlacklistRepository blacklistRepository = new SqliteBlacklistRepository(dbUrl);
         PasswordGenerator passwordGenerator = new SecurePasswordAdapter();
 
-        // 2. Core Service Initialization (Hexagonal Logic)
-        IdentityUseCase identityService = new IdentityService(userRepository, passwordGenerator);
+        // 2. Core Service Initialization
+        IdentityUseCase identityService = new IdentityService(userRepository, settingsRepository, passwordGenerator);
         
         // 3. Security & Controller Initialization
         AuthMiddleware.init(blacklistRepository); 
@@ -107,8 +107,8 @@ public class App {
 
         try {
             if (repo.findByUsername("25001234").isEmpty()) {
-                // Passwords for unclaimed accounts are empty; birthdate is the primary initial secret
-                User unclaimed = new User(UUID.randomUUID().toString(), "25001234", "", Role.STUDENT, "2000-01-01", false, true);
+                // Fixed: Added `true` for isActive at the end of the constructor
+                User unclaimed = new User(UUID.randomUUID().toString(), "25001234", "", Role.STUDENT, "2000-01-01", false, true, true);
                 repo.save(unclaimed);
                 logger.info("Unclaimed test account seeded: 25001234");
             }

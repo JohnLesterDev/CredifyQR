@@ -7,7 +7,6 @@
             --accent: #f39c12;
             --accent-hover: #e67e22;
         }
-
         .pwd-wrapper { position: relative; display: flex; align-items: center; }
         .pwd-wrapper input { padding-right: 40px; width: 100%; }
         .eye-btn { position: absolute; right: 12px; width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer; user-select: none; display: flex; }
@@ -35,27 +34,49 @@
         <form id="login-panel" onsubmit="event.preventDefault(); handleLogin();">
             <div class="form-group">
                 <label>Staff Username / Email</label>
-                <input type="text" th:id="'u_' + ${nonce}" th:name="'u_' + ${nonce}" data-target="login-user" autocomplete="new-password" required>
+                <input type="text" th:id="'u_' + ${nonce}" data-target="login-user" autocomplete="new-password" required>
             </div>
             <div class="form-group">
                 <label>Passphrase</label>
                 <div class="pwd-wrapper">
-                    <input type="password" th:id="'p_' + ${nonce}" th:name="'p_' + ${nonce}" data-target="login-pass" autocomplete="new-password" required>
+                    <input type="password" th:id="'p_' + ${nonce}" data-target="login-pass" autocomplete="new-password" required>
                     <div class="eye-btn" onmousedown="revealPwd(this)" onmouseup="hidePwd(this)" onmouseleave="hidePwd(this)">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
                     </div>
                 </div>
             </div>
             <label class="remember-me">
-                <input type="checkbox" id="remember-me" name="rememberMe">
+                <input type="checkbox" id="remember-me">
                 <span class="checkmark"></span>
                 Remember Me
             </label>
             <button type="submit" style="width: 100%;">Secure Login</button>
-            <p class="auth-toggle" style="margin-top: 1.5rem; font-size: 0.8rem;">
+            <p class="auth-toggle">First time Staff? <a href="#" onclick="showClaim()">Claim Identity</a></p>
+            <p class="auth-toggle" style="margin-top: 0.5rem; font-size: 0.8rem;">
                 <a href="/login">&larr; Return to Student Portal</a>
             </p>
             <div id="login-error" class="error hidden"></div>
+        </form>
+
+        <form id="claim-panel" class="hidden" onsubmit="event.preventDefault(); handleClaim();">
+            <div class="form-group">
+                <label>Staff Email</label>
+                <input type="text" id="claim-id" placeholder="e.g. user@domain.edu.ph" required>
+            </div>
+            <div class="form-group">
+                <label>Verification Birthdate</label>
+                <input type="date" id="claim-dob" required>
+            </div>
+            <button type="submit" style="width: 100%;">Verify & Extract Password</button>
+            <p class="auth-toggle">Identity claimed? <a href="#" onclick="showLogin()">Secure Login</a></p>
+            <div id="claim-error" class="error hidden"></div>
+
+            <div id="temp-password-box" class="temp-credential-card hidden">
+                <div class="credential-header">Identity Verified</div>
+                <p class="credential-warning">Store this password immediately. It will not be shown again.</p>
+                <div class="credential-value" id="temp-pwd-text"></div>
+                <button type="button" onclick="copyAndRedirect()" style="width: 100%;">Copy & Proceed to Login</button>
+            </div>
         </form>
 
         <script>
@@ -79,6 +100,79 @@
             function hidePwd(btn) {
                 btn.previousElementSibling.type = 'password';
                 btn.innerHTML = svgEyeClosed;
+            }
+
+            function showClaim() {
+                document.getElementById('login-panel').classList.add('hidden');
+                document.getElementById('claim-panel').classList.remove('hidden');
+                document.getElementById('panel-title').textContent = 'Claim Identity';
+            }
+
+            function showLogin() {
+                document.getElementById('claim-panel').classList.add('hidden');
+                document.getElementById('login-panel').classList.remove('hidden');
+                document.getElementById('panel-title').textContent = 'System Administration';
+            }
+
+            async function handleClaim() {
+                const id = document.getElementById('claim-id').value;
+                const dob = document.getElementById('claim-dob').value;
+                const err = document.getElementById('claim-error');
+                const box = document.getElementById('temp-password-box');
+                const pwdText = document.getElementById('temp-pwd-text');
+                
+                err.classList.add('hidden');
+                box.classList.add('hidden');
+
+                try {
+                    const formData = new URLSearchParams();
+                    formData.append('studentId', id); 
+                    formData.append('birthdate', dob);
+
+                    const resp = await fetch('/api/claim-account', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: formData
+                    });
+
+                    const text = await resp.text();
+                    if (resp.ok) {
+                        pwdText.textContent = text;
+                        box.classList.remove('hidden');
+                    } else {
+                        err.textContent = text;
+                        err.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    err.textContent = 'Network error. Try again.';
+                    err.classList.remove('hidden');
+                }
+            }
+
+            function copyAndRedirect() {
+                const pwd = document.getElementById('temp-pwd-text').textContent;
+                const staffId = document.getElementById('claim-id').value;
+                const btn = event.target;
+                
+                navigator.clipboard.writeText(pwd).then(() => {
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ Copied! Redirecting...';
+                    btn.style.backgroundColor = 'var(--success)';
+                    btn.disabled = true;
+
+                    document.querySelector('input[data-target="login-user"]').value = staffId;
+                    document.querySelector('input[data-target="login-pass"]').value = pwd;
+
+                    setTimeout(() => {
+                        showLogin();
+                        btn.textContent = originalText;
+                        btn.style.backgroundColor = '';
+                        btn.disabled = false;
+                        document.getElementById('temp-password-box').classList.add('hidden');
+                        document.getElementById('claim-id').value = '';
+                        document.getElementById('claim-dob').value = '';
+                    }, 1500);
+                }).catch(() => alert("Failed to copy. Please copy manually."));
             }
 
             async function handleLogin() {
