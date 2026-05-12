@@ -54,7 +54,7 @@
         <main class="main-content">
             <header class="topbar">
                 <div class="user-meta">
-                    <h2>Welcome, <span th:text="${username}">User</span></h2>
+                    <h2>Welcome, <span th:text="${fullName}">User</span></h2>
                     <p>System Access: <span class="role-badge" th:text="${role}">ROLE</span></p>
                 </div>
             </header>
@@ -66,8 +66,14 @@
                 <button class="tab-btn" onclick="switchTab('users')">User Management</button>
                 <button class="tab-btn" onclick="clearAppStorage()" style="margin-left: auto; background: rgba(231, 76, 60, 0.1); border-color: rgba(231, 76, 60, 0.3); color: var(--danger);">Hard Reset Storage</button>
             </div>
+            
+            <div th:if="${role == 'CAMPUS_DIRECTOR'}" style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; padding-bottom: 1rem;">
+                <button class="tab-btn active" onclick="switchTab('approvals')">Pending Approvals</button>
+                <button class="tab-btn" onclick="switchTab('users')">System Roster</button>
+            </div>
 
             <div id="tab-overview">
+                
                 <div class="data-section" th:if="${role == 'SYSTEM_ADMIN'}">
                     <h3>Institutional Configuration</h3>
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -81,12 +87,19 @@
                     </div>
                 </div>
 
-                <div class="data-section" th:if="${role == 'REGISTRAR_STAFF' or role == 'SYSTEM_ADMIN'}">
+                <div class="data-section" th:if="${role == 'REGISTRAR_STAFF'}">
                     <h3>Student Provisioning Pipeline</h3>
                     <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
                         Staging new student identities. Accounts are created in an <span style="color: var(--accent)">Unclaimed</span> state.
                     </p>
                     <form id="student-prov-form" onsubmit="event.preventDefault(); handleProvisioning('STUDENT');" style="max-width: 500px;">
+                        
+                        <div style="display: flex; gap: 10px; margin-bottom: 1.25rem;">
+                            <input type="text" id="prov-student-fn" placeholder="First Name" required style="flex: 2;">
+                            <input type="text" id="prov-student-mi" placeholder="M.I." maxlength="2" style="flex: 1;">
+                            <input type="text" id="prov-student-ln" placeholder="Last Name" required style="flex: 2;">
+                        </div>
+
                         <div class="form-group">
                             <label>8-Digit Student ID</label>
                             <input type="text" id="prov-student-id" required pattern="\d{8}" maxlength="8" oninput="this.value = this.value.replace(/[^0-9]/g, '');">
@@ -111,24 +124,36 @@
                 </div>
             </div>
 
-            <div id="tab-users" style="display: none;" th:if="${role == 'SYSTEM_ADMIN'}">
+            <div id="tab-users" style="display: none;" th:if="${role == 'SYSTEM_ADMIN' or role == 'CAMPUS_DIRECTOR'}">
                 
-                <div class="data-section">
+                <div class="data-section" th:if="${role == 'SYSTEM_ADMIN'}">
                     <h3>Deploy Employee Identity</h3>
-                    <form id="staff-prov-form" onsubmit="event.preventDefault(); handleStaffProvisioning();" style="display: flex; gap: 1rem; align-items: flex-end;">
-                        <div class="form-group" style="flex: 1; margin: 0;">
-                            <label>System Role</label>
-                            <select id="prov-staff-role" required>
-                                <option value="REGISTRAR_STAFF">Registrar Staff</option>
-                                <option value="CAMPUS_DIRECTOR">Campus Director</option>
-                            </select>
+                    <form id="staff-prov-form" onsubmit="event.preventDefault(); handleStaffProvisioning();">
+                        <div style="display: flex; gap: 10px; margin-bottom: 1.25rem;">
+                            <input type="text" id="prov-staff-fn" placeholder="First Name" required style="flex: 2;">
+                            <input type="text" id="prov-staff-mi" placeholder="M.I." maxlength="2" style="flex: 1;">
+                            <input type="text" id="prov-staff-ln" placeholder="Last Name" required style="flex: 2;">
                         </div>
-                        <button type="submit" style="margin: 0;">Generate & Provision</button>
+                        
+                        <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem;">
+                            <div class="form-group" style="flex: 1; margin: 0;">
+                                <label>System Role</label>
+                                <select id="prov-staff-role" required>
+                                    <option value="REGISTRAR_STAFF">Registrar Staff</option>
+                                    <option value="CAMPUS_DIRECTOR">Campus Director</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1; margin: 0;">
+                                <label>Verification Birthdate</label>
+                                <input type="date" id="prov-staff-dob" required>
+                            </div>
+                        </div>
+                        <button type="submit" style="width: 100%;">Generate & Provision</button>
                     </form>
                     <div id="staff-prov-result" class="temp-credential-card hidden">
                         <div class="credential-header">Employee Account Staged</div>
                         <div class="credential-value" id="prov-final-staff-id" style="font-size: 1.5rem;"></div>
-                        <p class="credential-warning" style="margin:0;">Direct staff to claim this account using their linked email.</p>
+                        <p class="credential-warning" style="margin:0;">Direct staff to claim this account using their ID and Birthdate.</p>
                     </div>
                 </div>
 
@@ -138,13 +163,35 @@
                         <thead>
                             <tr style="border-bottom: 1px solid var(--border);">
                                 <th style="padding: 10px;">Identifier</th>
+                                <th style="padding: 10px;">Full Name</th>
                                 <th style="padding: 10px;">Role</th>
                                 <th style="padding: 10px;">Email</th>
                                 <th style="padding: 10px;">Status</th>
                             </tr>
                         </thead>
                         <tbody id="user-table-body">
-                            </tbody>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-approvals" th:if="${role == 'CAMPUS_DIRECTOR'}">
+                <div class="data-section">
+                    <h3>Pending Registrar Approvals</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                        Registrar accounts remain locked and unable to authenticate until explicitly authorized.
+                    </p>
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <th style="padding: 10px;">Identifier</th>
+                                <th style="padding: 10px;">Full Name</th>
+                                <th style="padding: 10px;">Work Email</th>
+                                <th style="padding: 10px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approval-table-body">
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -179,6 +226,9 @@
                 document.addEventListener('DOMContentLoaded', async () => {
                     if (currentRole === 'SYSTEM_ADMIN') {
                         await fetchDomain();
+                    }
+                    if (currentRole === 'SYSTEM_ADMIN' || currentRole === 'CAMPUS_DIRECTOR') {
+                        loadUserTable();
                     }
                 });
 
@@ -251,6 +301,10 @@
                     const resultCard = document.getElementById('student-prov-result');
                     const username = document.getElementById('prov-student-id').value;
                     const dob = document.getElementById('prov-student-dob').value;
+                    
+                    const fn = document.getElementById('prov-student-fn').value;
+                    const ln = document.getElementById('prov-student-ln').value;
+                    const mi = document.getElementById('prov-student-mi').value;
 
                     errorEl.classList.add('hidden');
                     resultCard.classList.add('hidden');
@@ -259,6 +313,9 @@
                     formData.append('username', username);
                     formData.append('role', roleType);
                     formData.append('birthdate', dob);
+                    formData.append('firstName', fn);
+                    formData.append('lastName', ln);
+                    formData.append('middleInitial', mi);
 
                     try {
                         const resp = await fetch('/api/admin/users', {
@@ -285,29 +342,90 @@
                 function switchTab(tabId) {
                     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                     event.target.classList.add('active');
-                    document.getElementById('tab-overview').style.display = tabId === 'overview' ? 'block' : 'none';
-                    document.getElementById('tab-users').style.display = tabId === 'users' ? 'block' : 'none';
-                    if (tabId === 'users') loadUserTable();
+                    
+                    const overview = document.getElementById('tab-overview');
+                    const users = document.getElementById('tab-users');
+                    const approvals = document.getElementById('tab-approvals');
+                    
+                    if(overview) overview.style.display = tabId === 'overview' ? 'block' : 'none';
+                    if(users) users.style.display = tabId === 'users' ? 'block' : 'none';
+                    if(approvals) approvals.style.display = tabId === 'approvals' ? 'block' : 'none';
+                    
+                    if (tabId === 'users' || tabId === 'approvals') loadUserTable();
                 }
 
                 async function loadUserTable() {
                     const tbody = document.getElementById('user-table-body');
-                    tbody.innerHTML = '<tr><td colspan="4">Loading roster...</td></tr>';
+                    const appBody = document.getElementById('approval-table-body');
+                    
+                    if(tbody) tbody.innerHTML = '<tr><td colspan="5">Loading roster...</td></tr>';
+                    if(appBody) appBody.innerHTML = '<tr><td colspan="4">Loading pending approvals...</td></tr>';
+                    
                     try {
                         const res = await fetch('/api/admin/users');
                         if (res.ok) {
                             const users = await res.json();
-                            tbody.innerHTML = users.map(u => `
-                                <tr style="border-bottom: 1px solid var(--border);">
-                                    <td style="padding: 10px;">${u.username}</td>
-                                    <td style="padding: 10px;"><span class="role-badge">${u.role}</span></td>
-                                    <td style="padding: 10px; color: var(--text-secondary);">${u.email}</td>
-                                    <td style="padding: 10px;">${u.status}</td>
-                                </tr>
-                            `).join('');
+                            
+                            // Render Main Roster
+                            if(tbody) {
+                                tbody.innerHTML = users.map(u => `
+                                    <tr style="border-bottom: 1px solid var(--border);">
+                                        <td style="padding: 10px;">${u.username}</td>
+                                        <td style="padding: 10px; font-weight: 500;">${u.fullName}</td>
+                                        <td style="padding: 10px;"><span class="role-badge">${u.role}</span></td>
+                                        <td style="padding: 10px; color: var(--text-secondary);">${u.email}</td>
+                                        <td style="padding: 10px;">
+                                            ${u.status}
+                                            ${u.role === 'REGISTRAR_STAFF' && !u.isApproved ? '<br><span style="color:var(--danger); font-size:0.75rem;">(Locked/Pending)</span>' : ''}
+                                        </td>
+                                    </tr>
+                                `).join('');
+                            }
+
+                            // Render Pending Approvals (CD Only)
+                            if(appBody) {
+                                const pending = users.filter(u => u.role === 'REGISTRAR_STAFF' && !u.isApproved);
+                                if(pending.length === 0) {
+                                    appBody.innerHTML = '<tr><td colspan="4" style="padding:10px; color:var(--text-secondary);">No pending approvals.</td></tr>';
+                                } else {
+                                    appBody.innerHTML = pending.map(u => `
+                                        <tr style="border-bottom: 1px solid var(--border);">
+                                            <td style="padding: 10px; font-family: monospace;">${u.username}</td>
+                                            <td style="padding: 10px;">${u.fullName}</td>
+                                            <td style="padding: 10px; color: var(--text-secondary);">${u.email || 'Pending Claim'}</td>
+                                            <td style="padding: 10px;">
+                                                <button onclick="handleApprove('${u.id}')" style="padding: 6px 12px; font-size: 0.8rem; background: var(--success); margin:0;">Authorize</button>
+                                            </td>
+                                        </tr>
+                                    `).join('');
+                                }
+                            }
                         }
                     } catch (e) {
-                        tbody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load roster.</td></tr>';
+                        if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="color: var(--danger);">Failed to load roster.</td></tr>';
+                        if(appBody) appBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load approvals. Access Denied or Network Error.</td></tr>';}
+                }
+
+                async function handleApprove(targetId) {
+                    if(!confirm("Authorize this Registrar for system access?")) return;
+                    
+                    const formData = new URLSearchParams();
+                    formData.append('targetId', targetId);
+                    
+                    try {
+                        const res = await fetch('/api/admin/users/approve', { 
+                            method: 'POST', 
+                            body: formData, 
+                            credentials: 'same-origin' 
+                        });
+                        
+                        if(res.ok) {
+                            loadUserTable();
+                        } else {
+                            alert(await res.text());
+                        }
+                    } catch(e) {
+                        alert("Network error. Could not approve registrar.");
                     }
                 }
 
@@ -321,10 +439,18 @@
                     const prefix = Math.floor(10000000 + Math.random() * 90000000).toString();
                     const role = document.getElementById('prov-staff-role').value;
                     
+                    const fn = document.getElementById('prov-staff-fn').value;
+                    const ln = document.getElementById('prov-staff-ln').value;
+                    const mi = document.getElementById('prov-staff-mi').value;
+                    const dob = document.getElementById('prov-staff-dob').value;
+                    
                     const formData = new URLSearchParams();
                     formData.append('username', prefix);
                     formData.append('role', role);
-                    formData.append('birthdate', '1990-01-01');
+                    formData.append('birthdate', dob); // Real date captured here
+                    formData.append('firstName', fn);
+                    formData.append('lastName', ln);
+                    formData.append('middleInitial', mi);
 
                     try {
                         const resp = await fetch('/api/admin/users', { method: 'POST', body: formData });
@@ -332,6 +458,7 @@
                             const data = await resp.json();
                             document.getElementById('prov-final-staff-id').textContent = data.username;
                             document.getElementById('staff-prov-result').classList.remove('hidden');
+                            document.getElementById('staff-prov-form').reset();
                             loadUserTable();
                         } else {
                             alert(await resp.text());

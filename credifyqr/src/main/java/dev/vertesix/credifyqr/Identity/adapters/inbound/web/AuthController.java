@@ -30,40 +30,52 @@ public class AuthController {
         app.post("/api/logout", this::logout);
         app.get("/api/session", this::session);
         
-        // Claim endpoints
         app.post("/api/claim-account", this::claimAccount);
         app.post("/api/staff/claim-account", this::claimStaffAccount);
         
         app.post("/api/change-password", this::changePassword);
         
-        // Admin endpoints
         app.post("/api/admin/users", this::provisionUser);
+        app.post("/api/admin/users/approve", this::approveRegistrar);
+        
+        // ADD THIS: Public read-only route for the login page
+        app.get("/api/public/domain", this::getDomain);
+        
+        // Keep these for the authenticated SysAdmin dashboard
         app.get("/api/admin/settings/domain", this::getDomain);
         app.post("/api/admin/settings/domain", this::setDomain);
 
         app.get("/api/admin/users", this::getAllUsers);
-        app.post("/api/admin/clear-cache", this::clearCache); // Helper
+        app.post("/api/admin/clear-cache", this::clearCache);
     }
 
     private void login(Context ctx) {
-        String username = SanitizerUtil.clean(ctx.formParam("username"));
+        // Drop SanitizerUtil so the '@' symbol in emails survives
+        String usernameOrEmail = ctx.formParam("username");
         String password = ctx.formParam("password");
         boolean rememberMe = Boolean.parseBoolean(ctx.formParam("rememberMe"));
 
-        if (username == null || password == null) {
+        if (usernameOrEmail == null || password == null) {
             ctx.status(400).result("Missing credentials");
             return;
         }
 
+        // Clean whitespace and normalize case for emails
+        usernameOrEmail = usernameOrEmail.trim();
+        if (usernameOrEmail.contains("@")) {
+            usernameOrEmail = usernameOrEmail.toLowerCase();
+        }
+
         String referer = ctx.header("Referer");
         if (referer != null && !referer.contains("/admin")) {
-            if (!username.matches("\\d+")) {
+            // Student portal strictly requires numeric ID
+            if (!usernameOrEmail.matches("\\d+")) {
                 ctx.status(400).result("Credential ID must be numeric.");
                 return;
             }
         }
 
-        Optional<User> authenticatedUser = identityUseCase.authenticate(username, password);
+        Optional<User> authenticatedUser = identityUseCase.authenticate(usernameOrEmail, password);
 
         if (authenticatedUser.isPresent()) {
             User user = authenticatedUser.get();
@@ -88,7 +100,7 @@ public class AuthController {
             
             ctx.status(200).result("Login successful");
         } else {
-            ctx.status(401).result("Invalid credentials or account suspended.");
+            ctx.status(401).result("Invalid credentials, pending approval, or account suspended.");
         }
     }
 
@@ -98,9 +110,7 @@ public class AuthController {
             try {
                 Claims claims = JwtProvider.validateToken(token);
                 blacklistRepository.blacklist(claims.getId(), claims.getExpiration().getTime());
-            } catch (Exception ignored) {
-                // Ignore expired token errors on logout
-            }
+            } catch (Exception ignored) {}
         }
         ctx.removeCookie("auth_token");
         ctx.status(200).result("Logged out and session revoked.");
@@ -154,17 +164,47 @@ public class AuthController {
     }
 
     private void claimStaffAccount(Context ctx) {
-        String employeeId = SanitizerUtil.clean(ctx.formParam("employeeId"));
-        String email = SanitizerUtil.clean(ctx.formParam("email"));
-        String birthdate = SanitizerUtil.clean(ctx.formParam("birthdate"));
+        String employeeId = ctx.formParam("employeeId");
+        String birthdate = ctx.formParam("birthdate");
+        String email = ctx.formParam("email");
 
         if (employeeId == null || email == null || birthdate == null) {
             ctx.status(400).result("Missing staff verification details.");
             return;
         }
 
+        // Standard trim for ID and Birthdate
+        employeeId = employeeId.trim();
+        birthdate = birthdate.trim();
+
+        // GUARD CLAUSE: Enforce Institutional Domain Boundary
         try {
-            String tempPassword = identityUseCase.claimStaffAccount(employeeId, email, birthdate);
+            String requiredDomain = identityUseCase.getInstitutionDomain();
+            if (requiredDomain == null || requiredDomain.isBlank()) {
+                ctx.status(400).result("Institution domain is not configured. Contact System Administrator.");
+                return;
+            }
+            
+            // AGGRESSIVE SANITIZATION: Kill all unicode spaces, \r, \n, and non-printable artifacts
+            requiredDomain = requiredDomain.replaceAll("[^a-zA-Z0-9.-]", "").toLowerCase();
+            String cleanEmail = email.replaceAll("[^a-zA-Z0-9.@_-]", "").toLowerCase();
+            
+            if (!cleanEmail.endsWith("@" + requiredDomain)) {
+                // If it fails, this will expose exactly what the backend evaluated
+                ctx.status(400).result(String.format("Security violation: [%s] does not match domain [@%s]", cleanEmail, requiredDomain));
+                return;
+            }
+            
+            // Safe to proceed with strictly cleaned email
+            email = cleanEmail;
+            
+        } catch (Exception e) {
+            ctx.status(500).result("Failed to verify institutional domain.");
+            return;
+        }
+
+        try {
+            String tempPassword = identityUseCase.claimStaffAccount(employeeId, birthdate, email);
             ctx.status(200).result(tempPassword);
         } catch (IllegalArgumentException e) {
             ctx.status(400).result(e.getMessage());
@@ -205,6 +245,11 @@ public class AuthController {
         String newUsername = SanitizerUtil.clean(ctx.formParam("username"));
         String roleStr = SanitizerUtil.clean(ctx.formParam("role"));
         String birthdate = SanitizerUtil.clean(ctx.formParam("birthdate"));
+        
+        // NEW PARAMETERS EXTRACTED HERE
+        String firstName = SanitizerUtil.clean(ctx.formParam("firstName"));
+        String lastName = SanitizerUtil.clean(ctx.formParam("lastName"));
+        String middleInitial = SanitizerUtil.clean(ctx.formParam("middleInitial"));
 
         if (newUsername == null || newUsername.isBlank() || roleStr == null || roleStr.isBlank()) {
             ctx.status(400).result("Missing username or role.");
@@ -221,10 +266,15 @@ public class AuthController {
                 return;
             }
 
-            Map<String, Object> result = identityUseCase.provisionUser(creatorId, newUsername, birthdate, targetRole);
+            Map<String, Object> result = identityUseCase.provisionUser(
+                creatorId, newUsername, birthdate, targetRole, 
+                firstName == null ? "" : firstName, 
+                lastName == null ? "" : lastName, 
+                middleInitial == null ? "" : middleInitial
+            );
+            
             User provisionedUser = (User) result.get("user");
             
-            // Note: tempPassword mapping removed here. Accounts are generated 'Unclaimed'.
             ctx.status(201).json(Map.of(
                 "message", "User provisioned successfully",
                 "userId", provisionedUser.getId(),
@@ -236,6 +286,29 @@ public class AuthController {
             ctx.status(400).result(e.getMessage());
         } catch (Exception e) {
             ctx.status(500).result("Internal provisioning error.");
+        }
+    }
+
+    private void approveRegistrar(Context ctx) {
+        String directorId = ctx.attribute("userId");
+        String targetId = SanitizerUtil.clean(ctx.formParam("targetId"));
+        
+        if (directorId == null) {
+            ctx.status(401).result("Unauthorized.");
+            return;
+        }
+        if (targetId == null || targetId.isBlank()) {
+            ctx.status(400).result("Missing target ID.");
+            return;
+        }
+        
+        try {
+            identityUseCase.approveRegistrar(directorId, targetId);
+            ctx.status(200).result("Registrar approved successfully.");
+        } catch (SecurityException | IllegalArgumentException e) {
+            ctx.status(400).result(e.getMessage());
+        } catch (Exception e) {
+            ctx.status(500).result("Approval failed.");
         }
     }
 
@@ -269,16 +342,18 @@ public class AuthController {
     }
 
     private void getAllUsers(Context ctx) {
-        String adminId = ctx.attribute("userId");
+        String requestingUserId = ctx.attribute("userId");
         try {
-            // You'll need to map the User objects to a clean JSON structure to avoid leaking password hashes.
-            List<Map<String, Object>> safeList = identityUseCase.getAllUsers(adminId).stream()
+            List<Map<String, Object>> safeList = identityUseCase.getAllUsers(requestingUserId).stream()
                 .map(u -> Map.<String, Object>of(
                     "id", u.getId(),
                     "username", u.getUsername(),
+                    "fullName", u.getFullName(), // Added for dashboard roster
                     "email", u.getEmail() == null ? "N/A" : u.getEmail(),
                     "role", u.getRole().name(),
-                    "status", u.isActive() ? (u.isClaimed() ? "Active" : "Unclaimed") : "Suspended"
+                    "status", u.isActive() ? 
+                        (u.isClaimed() ? "Active" : "Unclaimed") : "Suspended",
+                    "isApproved", u.isApproved() // Expose approval state
                 )).toList();
             ctx.status(200).json(safeList);
         } catch (Exception e) {
@@ -287,8 +362,6 @@ public class AuthController {
     }
 
     private void clearCache(Context ctx) {
-        // This is primarily for backend-driven cookie wipes if needed, 
-        // but localStorage clearing must happen on the client side.
         ctx.removeCookie("portal_pref");
         ctx.removeCookie("auth_token");
         ctx.status(200).result("Cookies cleared. Client must clear localStorage.");

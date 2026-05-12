@@ -51,7 +51,7 @@
                 Remember Me
             </label>
             <button type="submit" style="width: 100%;">Secure Login</button>
-            <p class="auth-toggle">First time Staff? <a href="#" onclick="showClaim()">Claim Identity</a></p>
+            <p class="auth-toggle">First time Staff? <a href="#" id="claim-link" onclick="showClaim()">Claim Identity</a></p>            
             <p class="auth-toggle" style="margin-top: 0.5rem; font-size: 0.8rem;">
                 <a href="/login">&larr; Return to Student Portal</a>
             </p>
@@ -59,23 +59,32 @@
         </form>
 
         <form id="claim-panel" class="hidden" onsubmit="event.preventDefault(); handleClaim();">
-            <div class="form-group">
-                <label>Assigned Staff Username</label>
-                <input type="text" id="claim-id" placeholder="e.g. prefix@domain.edu.ph" required>
+            
+            <div style="border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1rem;">
+                <div class="form-group">
+                    <label>Assigned Staff Username</label>
+                    <input type="text" id="claim-id" placeholder="e.g. 76403448" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Verification Birthdate</label>
+                    <input type="date" id="claim-dob" required>
+                </div>
             </div>
+
             <div class="form-group">
-                <label>Linked / Recovery Email</label>
-                <input type="email" id="claim-email" placeholder="e.g. personal@gmail.com" required>
+                <label>Set Work / Recovery Email</label>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="text" id="claim-email-prefix" placeholder="e.g. jdoe" required pattern="[a-zA-Z0-9._\-]+" title="Only letters, numbers, dots, dashes, and underscores allowed." style="flex: 1;">
+                    <span id="domain-suffix" style="color: var(--text-secondary); font-weight: 500; font-family: monospace;">@loading...</span>
+                </div>
+                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 5px;">This email will be permanently linked to your account.</p>
             </div>
-            <div class="form-group">
-                <label>Verification Birthdate</label>
-                <input type="date" id="claim-dob" required>
-            </div>
-            <button type="submit" style="width: 100%;">Verify & Extract Password</button>
+
+            <button type="submit" style="width: 100%; margin-top: 1rem;">Verify & Extract Password</button>
             <p class="auth-toggle">Identity claimed? <a href="#" onclick="showLogin()">Secure Login</a></p>
             <div id="claim-error" class="error hidden"></div>
 
-            <div id="temp-password-box" class="temp-credential-card hidden">
+            <div id="temp-password-box" class="temp-credential-card hidden" style="margin-top: 1.5rem;">
                 <div class="credential-header">Identity Verified</div>
                 <p class="credential-warning">Store this password immediately. It will not be shown again.</p>
                 <div class="credential-value" id="temp-pwd-text"></div>
@@ -87,13 +96,48 @@
             const svgEyeClosed = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
             const svgEyeOpen = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
 
-            document.addEventListener('DOMContentLoaded', () => {
+            let globalDomain = "";
+
+            document.addEventListener('DOMContentLoaded', async () => {
                 const savedUser = localStorage.getItem('credify_staff_id');
                 if (savedUser) {
                     document.querySelector('input[data-target="login-user"]').value = savedUser;
                     document.getElementById('remember-me').checked = true;
                 }
+
+                // Fetch institutional domain on load via PUBLIC route
+                try {
+                    const res = await fetch('/api/public/domain');
+                    if (res.ok) {
+                        const data = await res.json();
+                        globalDomain = data.domain;
+                        
+                        if (globalDomain) {
+                            document.getElementById('domain-suffix').textContent = '@' + globalDomain;
+                        } else {
+                            lockSystem("DOMAIN NOT CONFIGURED");
+                        }
+                    } else {
+                        lockSystem("API REJECTED");
+                    }
+                } catch(e) {
+                    lockSystem("NETWORK ERROR");
+                }
             });
+
+            // Aggressive UI Lockdown
+            function lockSystem(reason) {
+                document.getElementById('domain-suffix').textContent = '@[LOCKED]';
+                
+                const claimLink = document.getElementById('claim-link');
+                if (claimLink) {
+                    claimLink.style.opacity = '0.4';
+                    claimLink.style.pointerEvents = 'none';
+                    claimLink.style.cursor = 'not-allowed';
+                    claimLink.style.textDecoration = 'none';
+                    claimLink.title = `Disabled: ${reason}`;
+                }
+            }
 
             function revealPwd(btn, e) {
                 if (e) e.preventDefault();
@@ -120,8 +164,9 @@
 
             async function handleClaim() {
                 const id = document.getElementById('claim-id').value;
-                const email = document.getElementById('claim-email').value;
                 const dob = document.getElementById('claim-dob').value;
+                const prefix = document.getElementById('claim-email-prefix').value;
+                
                 const err = document.getElementById('claim-error');
                 const box = document.getElementById('temp-password-box');
                 const pwdText = document.getElementById('temp-pwd-text');
@@ -129,13 +174,25 @@
                 err.classList.add('hidden');
                 box.classList.add('hidden');
 
+                if (!globalDomain) {
+                    err.textContent = 'Institution domain is not configured. Contact SysAdmin.';
+                    err.classList.remove('hidden');
+                    return;
+                }
+                if (!/^[a-zA-Z0-9._\-]+$/.test(prefix)) {
+                    err.textContent = 'Invalid email prefix. Use only letters, numbers, dots, dashes, and underscores.';
+                    err.classList.remove('hidden');
+                    return;
+                }
+
+                const fullEmail = prefix + '@' + globalDomain;
+
                 try {
                     const formData = new URLSearchParams();
                     formData.append('employeeId', id); 
-                    formData.append('email', email);
                     formData.append('birthdate', dob);
+                    formData.append('email', fullEmail); 
 
-                    // Note the updated endpoint routing here
                     const resp = await fetch('/api/staff/claim-account', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -158,7 +215,8 @@
 
             function copyAndRedirect() {
                 const pwd = document.getElementById('temp-pwd-text').textContent;
-                const staffId = document.getElementById('claim-id').value;
+                const prefix = document.getElementById('claim-email-prefix').value;
+                const fullEmail = prefix + '@' + globalDomain;
                 const btn = event.target;
                 
                 navigator.clipboard.writeText(pwd).then(() => {
@@ -167,7 +225,7 @@
                     btn.style.backgroundColor = 'var(--success)';
                     btn.disabled = true;
 
-                    document.querySelector('input[data-target="login-user"]').value = staffId;
+                    document.querySelector('input[data-target="login-user"]').value = fullEmail;
                     document.querySelector('input[data-target="login-pass"]').value = pwd;
 
                     setTimeout(() => {
@@ -177,7 +235,7 @@
                         btn.disabled = false;
                         document.getElementById('temp-password-box').classList.add('hidden');
                         document.getElementById('claim-id').value = '';
-                        document.getElementById('claim-email').value = '';
+                        document.getElementById('claim-email-prefix').value = '';
                         document.getElementById('claim-dob').value = '';
                     }, 1500);
                 }).catch(() => alert("Failed to copy. Please copy manually."));

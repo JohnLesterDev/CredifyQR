@@ -23,16 +23,26 @@ public class IdentityService implements IdentityUseCase {
     }
 
     @Override
-    public Optional<User> authenticate(String username, String password) {
-        return userRepository.findByUsername(username)
+    public Optional<User> authenticate(String usernameOrEmail, String password) {
+        Optional<User> userOpt = userRepository.findByUsername(usernameOrEmail);
+        
+        if (userOpt.isEmpty() && usernameOrEmail.contains("@")) {
+            userOpt = userRepository.findByEmail(usernameOrEmail);
+        }
+
+        return userOpt
             .filter(User::isActive)
-            .filter(User::isClaimed) 
+            .filter(User::isClaimed)
+            .filter(user -> {
+                // Registrar accounts require explicit Campus Director approval
+                if (user.getRole() == Role.REGISTRAR_STAFF) return user.isApproved();
+                return true;
+            })
             .filter(user -> BCrypt.checkpw(password, user.getPasswordHash()));
     }
 
     @Override
     public void registerUser(String username, String password, String roleStr) {
-        // This is primarily used for seeding or open registration if enabled
         if (userRepository.findByUsername(username).isPresent()) {
             throw new IllegalArgumentException("Username already exists.");
         }
@@ -40,27 +50,29 @@ public class IdentityService implements IdentityUseCase {
         User newUser = new User(
             UUID.randomUUID().toString(), 
             username, 
-            null, // Email usually provided later or via provisioning
+            null, 
             hashPassword(password), 
             role, 
-            "1990-01-01", true, false, true
+            "1990-01-01", 
+            "", "", "", // Blank names for legacy registration
+            true, false, true, true 
         );
         userRepository.save(newUser);
     }
 
     @Override
-    public Map<String, Object> provisionUser(String creatorId, String newUsername, String birthdate, Role targetRole) {
+    public Map<String, Object> provisionUser(String creatorId, String newUsername, String birthdate, Role targetRole, String firstName, String lastName, String middleInitial) {
         User creator = userRepository.findById(creatorId)
             .orElseThrow(() -> new IllegalArgumentException("Creator not found."));
 
-        // Logic Overhaul: SysAdmin manages Staff. Registrar manages Students.
+        // Strict boundary enforcement
         if (targetRole == Role.CAMPUS_DIRECTOR || targetRole == Role.REGISTRAR_STAFF) {
             if (creator.getRole() != Role.SYSTEM_ADMIN) {
-                throw new SecurityException("Only System Administrators can provision Staff accounts.");
+                throw new SecurityException("Only System Administrators can provision Employee accounts.");
             }
         } else if (targetRole == Role.STUDENT) {
-            if (creator.getRole() != Role.REGISTRAR_STAFF && creator.getRole() != Role.SYSTEM_ADMIN) {
-                throw new SecurityException("Insufficient permissions to provision Student accounts.");
+            if (creator.getRole() != Role.REGISTRAR_STAFF) {
+                throw new SecurityException("Only Registrar Staff can provision Student accounts.");
             }
         }
 
@@ -68,17 +80,23 @@ public class IdentityService implements IdentityUseCase {
             throw new IllegalArgumentException("Identifier already exists.");
         }
 
-        // Create in 'Unclaimed' state
+        // Registrars are locked (isApproved = false) until Campus Director intervenes
+        boolean isApproved = (targetRole != Role.REGISTRAR_STAFF);
+
         User newUser = new User(
             UUID.randomUUID().toString(),
             newUsername,
-            null, // Email will be set during claim or by SysAdmin later
-            "",   // No password until claimed
+            null, 
+            "",   
             targetRole,
             birthdate,
+            firstName,
+            lastName,
+            middleInitial,
             false, // isClaimed
             true,  // needsPasswordReset
-            true   // isActive
+            true,  // isActive
+            isApproved
         );
         
         userRepository.save(newUser);
@@ -87,7 +105,6 @@ public class IdentityService implements IdentityUseCase {
 
     @Override
     public String claimAccount(String identifier, String birthdate) {
-        // Default claim for Students (ID + DOB)
         User user = userRepository.findByUsername(identifier)
             .orElseThrow(() -> new IllegalArgumentException("Identity not found."));
         
@@ -95,11 +112,15 @@ public class IdentityService implements IdentityUseCase {
             throw new IllegalArgumentException("Staff must use the Secure Staff Claim portal.");
         }
 
-        return executeClaim(user, birthdate);
+        if (!birthdate.equals(user.getBirthdate())) {
+            throw new IllegalArgumentException("Verification failed: Invalid details.");
+        }
+
+        return executeClaim(user);
     }
 
-    // New Secure Pipeline for Staff: ID + Email + DOB
-    public String claimStaffAccount(String employeeId, String email, String birthdate) {
+    @Override
+    public String claimStaffAccount(String employeeId, String birthdate, String newEmail) {
         User user = userRepository.findByUsername(employeeId)
             .orElseThrow(() -> new IllegalArgumentException("Staff identity not found."));
 
@@ -107,22 +128,21 @@ public class IdentityService implements IdentityUseCase {
             throw new IllegalArgumentException("Invalid portal for Student identity.");
         }
 
-        // Match all three factors
         if (!birthdate.equals(user.getBirthdate())) {
             throw new IllegalArgumentException("Verification failed: Invalid details.");
         }
 
-        // Link email to account if not already set, then verify
-        if (user.getEmail() == null) {
-            user.setEmail(email);
-        } else if (!user.getEmail().equalsIgnoreCase(email)) {
-            throw new IllegalArgumentException("Verification failed: Email mismatch.");
+        if (newEmail == null || newEmail.isBlank()) {
+            throw new IllegalArgumentException("Work email is required to claim an Employee account.");
         }
 
-        return executeClaim(user, birthdate);
+        // Set the requested work email natively during the claim process
+        user.setEmail(newEmail);
+
+        return executeClaim(user);
     }
 
-    private String executeClaim(User user, String birthdate) {
+    private String executeClaim(User user) {
         if (user.isClaimed()) throw new IllegalArgumentException("Account already claimed.");
         if (!user.isActive()) throw new IllegalArgumentException("Account suspended.");
 
@@ -143,11 +163,24 @@ public class IdentityService implements IdentityUseCase {
         userRepository.save(user);
     }
 
-    private String hashPassword(String password) {
-        return BCrypt.hashpw(password, BCrypt.gensalt(12));
+    @Override
+    public void approveRegistrar(String directorId, String targetRegistrarId) {
+        User director = userRepository.findById(directorId).orElseThrow();
+        if (director.getRole() != Role.CAMPUS_DIRECTOR) {
+            throw new SecurityException("Only Campus Directors can approve Registrars.");
+        }
+        
+        User registrar = userRepository.findById(targetRegistrarId)
+            .orElseThrow(() -> new IllegalArgumentException("Target user not found."));
+            
+        if (registrar.getRole() != Role.REGISTRAR_STAFF) {
+            throw new IllegalArgumentException("Target is not a Registrar account.");
+        }
+        
+        registrar.setApproved(true);
+        userRepository.save(registrar);
     }
 
-    // Port implementations for domain and finding users...
     @Override public Optional<User> findById(String id) { return userRepository.findById(id); }
     @Override public String getInstitutionDomain() { return settingsRepository.getSetting("INSTITUTION_DOMAIN").orElse(""); }
     @Override public void updateInstitutionDomain(String directorId, String password, String newDomain) {
@@ -159,9 +192,14 @@ public class IdentityService implements IdentityUseCase {
     @Override
     public List<User> getAllUsers(String requestingUserId) {
         User requester = userRepository.findById(requestingUserId).orElseThrow();
-        if (requester.getRole() != Role.SYSTEM_ADMIN) {
-            throw new SecurityException("Only System Administrators can view the user roster.");
+        // Allow SysAdmin OR Campus Director to pull lists (CD needs it to see pending Registrars)
+        if (requester.getRole() != Role.SYSTEM_ADMIN && requester.getRole() != Role.CAMPUS_DIRECTOR) {
+            throw new SecurityException("Unauthorized to view system roster.");
         }
         return userRepository.findAll();
     }
-}   
+
+    private String hashPassword(String password) {
+        return BCrypt.hashpw(password, BCrypt.gensalt(12));
+    }
+}

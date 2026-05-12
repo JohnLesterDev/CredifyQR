@@ -88,6 +88,8 @@ public class PageController {
         }
 
         Map<String, Object> model = new HashMap<>();
+        // Injected fullName for UI display
+        model.put("fullName", user.getFullName());
         model.put("username", user.getUsername());
         model.put("role", user.getRole().name());
         ctx.render("dashboard", model);

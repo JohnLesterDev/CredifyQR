@@ -66,7 +66,9 @@ public class App {
         app.before("/api/admin/settings/*", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN));
         
         // Provisioning logic: Staff creation (SysAdmin only), Student creation (Registrar/SysAdmin)
-        app.before("/api/admin/users", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN, Role.REGISTRAR_STAFF));
+        app.before("/api/admin/users", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
+
+        app.before("/api/admin/users/approve", ctx -> AuthMiddleware.requireRole(ctx, Role.CAMPUS_DIRECTOR));
 
         seedSystem(identityService, userRepository);
 
@@ -74,36 +76,21 @@ public class App {
     }
 
     private static void seedSystem(IdentityUseCase service, UserRepository repo) {
-        // Seed the MASTER SysAdmin if it doesn't exist
-        if (repo.findByUsername("admin_root").isEmpty()) {
+        if (repo.findByUsername("sysadmin").isEmpty()) {
             User sysAdmin = new User(
                 UUID.randomUUID().toString(), 
-                "admin_root", 
-                "sysadmin@credify.edu.ph", 
-                org.mindrot.jbcrypt.BCrypt.hashpw("root1234", org.mindrot.jbcrypt.BCrypt.gensalt(12)), 
+                "sysadmin", 
+                "sysadmin@vertesix.dev", 
+                org.mindrot.jbcrypt.BCrypt.hashpw("admin123", org.mindrot.jbcrypt.BCrypt.gensalt(12)), 
                 Role.SYSTEM_ADMIN, 
-                "2000-01-01", 
-                true, false, true
+                "2000-01-01",
+                "System",      // firstName
+                "Administrator", // lastName
+                "V",            // middleInitial
+                true, false, true, true // isClaimed, needsPasswordReset, isActive, isApproved
             );
             repo.save(sysAdmin);
-            logger.info("SYSTEM_ADMIN seeded. User: admin_root | Pwd: root1234");
-        }
-
-        // Restore the unclaimed student for the verification test pipeline
-        if (repo.findByUsername("25001234").isEmpty()) {
-            User unclaimedStudent = new User(
-                UUID.randomUUID().toString(),
-                "25001234",
-                null, // Email is null; not strictly required for Student claims
-                "",   // Empty password hash; will be generated during claim
-                Role.STUDENT,
-                "2000-01-01",
-                false, // isClaimed
-                true,  // needsPasswordReset
-                true   // isActive
-            );
-            repo.save(unclaimedStudent);
-            logger.info("Unclaimed test account seeded: 25001234 | DOB: 2000-01-01");
+            logger.info("SYSTEM_ADMIN seeded. User: sysadmin");
         }
     }
 

@@ -16,7 +16,6 @@ public class SqliteUserRepository implements UserRepository {
     }
 
     private void initTable() {
-        // Added email column to the schema
         String sql = """
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
@@ -25,9 +24,13 @@ public class SqliteUserRepository implements UserRepository {
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL,
                 birthdate TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                middle_initial TEXT,
                 is_claimed INTEGER NOT NULL,
                 needs_password_reset INTEGER NOT NULL,
-                is_active INTEGER NOT NULL DEFAULT 1
+                is_active INTEGER NOT NULL DEFAULT 1,
+                is_approved INTEGER NOT NULL DEFAULT 1
             );
             """;
         try (Connection conn = DatabaseConnection.getConnection();
@@ -50,7 +53,6 @@ public class SqliteUserRepository implements UserRepository {
         return queryUser(sql, id);
     }
 
-    // This handles your "Employee ID + Email + Birthdate" requirement
     public Optional<User> findByClaimDetails(String username, String email, String birthdate) {
         String sql = "SELECT * FROM users WHERE username = ? AND email = ? AND birthdate = ?";
         try (Connection conn = DatabaseConnection.getConnection();
@@ -69,26 +71,34 @@ public class SqliteUserRepository implements UserRepository {
     @Override
     public void save(User user) {
         String sql = """
-            INSERT INTO users(id, username, email, password_hash, role, birthdate, is_claimed, needs_password_reset, is_active) 
-            VALUES(?,?,?,?,?,?,?,?,?)
+            INSERT INTO users(id, username, email, password_hash, role, birthdate, first_name, last_name, middle_initial, is_claimed, needs_password_reset, is_active, is_approved) 
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(id) DO UPDATE SET 
                 password_hash=excluded.password_hash, 
                 email=excluded.email,
+                first_name=excluded.first_name,
+                last_name=excluded.last_name,
+                middle_initial=excluded.middle_initial,
                 is_claimed=excluded.is_claimed, 
                 needs_password_reset=excluded.needs_password_reset, 
-                is_active=excluded.is_active;
+                is_active=excluded.is_active,
+                is_approved=excluded.is_approved;
             """;
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, user.getId());
             pstmt.setString(2, user.getUsername());
-            pstmt.setString(3, user.getEmail()); // New field
+            pstmt.setString(3, user.getEmail());
             pstmt.setString(4, user.getPasswordHash());
             pstmt.setString(5, user.getRole().name());
             pstmt.setString(6, user.getBirthdate());
-            pstmt.setInt(7, user.isClaimed() ? 1 : 0);
-            pstmt.setInt(8, user.needsPasswordReset() ? 1 : 0);
-            pstmt.setInt(9, user.isActive() ? 1 : 0);
+            pstmt.setString(7, user.getFirstName());
+            pstmt.setString(8, user.getLastName());
+            pstmt.setString(9, user.getMiddleInitial());
+            pstmt.setInt(10, user.isClaimed() ? 1 : 0);
+            pstmt.setInt(11, user.needsPasswordReset() ? 1 : 0);
+            pstmt.setInt(12, user.isActive() ? 1 : 0);
+            pstmt.setInt(13, user.isApproved() ? 1 : 0);
             pstmt.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save user", e);
@@ -111,13 +121,17 @@ public class SqliteUserRepository implements UserRepository {
         return new User(
             rs.getString("id"),
             rs.getString("username"),
-            rs.getString("email"), // Map the new column
+            rs.getString("email"), 
             rs.getString("password_hash"),
             Role.valueOf(rs.getString("role")),
             rs.getString("birthdate"),
+            rs.getString("first_name"),
+            rs.getString("last_name"),
+            rs.getString("middle_initial"),
             rs.getInt("is_claimed") == 1,
             rs.getInt("needs_password_reset") == 1,
-            rs.getInt("is_active") == 1
+            rs.getInt("is_active") == 1,
+            rs.getInt("is_approved") == 1
         );
     }
 
@@ -125,7 +139,7 @@ public class SqliteUserRepository implements UserRepository {
     public Optional<User> findByEmail(String email) {
         String sql = "SELECT * FROM users WHERE email = ?";
         try (Connection conn = DatabaseConnection.getConnection();
-            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, email);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) return Optional.of(mapToUser(rs));
@@ -140,8 +154,8 @@ public class SqliteUserRepository implements UserRepository {
         List<User> users = new ArrayList<>();
         String sql = "SELECT * FROM users ORDER BY role, username";
         try (Connection conn = DatabaseConnection.getConnection();
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery(sql)) {
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 users.add(mapToUser(rs));
             }
