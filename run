@@ -4,7 +4,7 @@ trap "echo -e '\n[SYSTEM] Termination received. Shutting down loop.'; exit" SIGI
 
 while true; do
     echo "[SYSTEM] Starting CredifyQR..."
-    ./gradlew run
+    rm credifyqr/credifyqr.db && ./gradlew run
     EXIT_CODE=$?
 
     # If code is 130, it was a manual Ctrl+C inside the app

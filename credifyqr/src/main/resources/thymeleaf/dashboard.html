@@ -218,10 +218,23 @@
                 </div>
             </div>
 
+            <!-- Custom Approval Modal -->
+            <div id="approve-modal" class="modal-overlay" onclick="closeApproveModal(event)">
+                <div class="modal-card" onclick="event.stopPropagation()">
+                    <h3>Confirm Authorization</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem;">Authorize this Registrar for system access?</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" id="confirm-approve-btn" style="flex: 1; background: var(--success);">Authorize</button>
+                        <button type="button" class="secondary" onclick="closeApproveModal()" style="flex: 1;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
             <script th:inline="javascript">
                 const currentRole = /*[[${role}]]*/ 'STUDENT';
                 let globalDomain = "";
                 let isModalForced = false;
+                let pendingApproveId = null; // Track target for approval modal
 
                 document.addEventListener('DOMContentLoaded', async () => {
                     if (currentRole === 'SYSTEM_ADMIN') {
@@ -366,7 +379,6 @@
                         if (res.ok) {
                             const users = await res.json();
                             
-                            // Render Main Roster
                             if(tbody) {
                                 tbody.innerHTML = users.map(u => `
                                     <tr style="border-bottom: 1px solid var(--border);">
@@ -382,7 +394,6 @@
                                 `).join('');
                             }
 
-                            // Render Pending Approvals (CD Only)
                             if(appBody) {
                                 const pending = users.filter(u => u.role === 'REGISTRAR_STAFF' && !u.isApproved);
                                 if(pending.length === 0) {
@@ -394,7 +405,7 @@
                                             <td style="padding: 10px;">${u.fullName}</td>
                                             <td style="padding: 10px; color: var(--text-secondary);">${u.email || 'Pending Claim'}</td>
                                             <td style="padding: 10px;">
-                                                <button onclick="handleApprove('${u.id}')" style="padding: 6px 12px; font-size: 0.8rem; background: var(--success); margin:0;">Authorize</button>
+                                                <button onclick="openApproveModal('${u.id}')" style="padding: 6px 12px; font-size: 0.8rem; background: var(--success); margin:0;">Authorize</button>
                                             </td>
                                         </tr>
                                     `).join('');
@@ -403,11 +414,27 @@
                         }
                     } catch (e) {
                         if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="color: var(--danger);">Failed to load roster.</td></tr>';
-                        if(appBody) appBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load approvals. Access Denied or Network Error.</td></tr>';}
+                        if(appBody) appBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load approvals. Access Denied or Network Error.</td></tr>';
+                    }
                 }
 
-                async function handleApprove(targetId) {
-                    if(!confirm("Authorize this Registrar for system access?")) return;
+                // New Approval Modal Logic
+                function openApproveModal(targetId) {
+                    pendingApproveId = targetId;
+                    document.getElementById('approve-modal').style.display = 'flex';
+                }
+
+                function closeApproveModal(e) {
+                    if (!e || e.target.id === 'approve-modal' || e.type === 'click') {
+                        document.getElementById('approve-modal').style.display = 'none';
+                        pendingApproveId = null;
+                    }
+                }
+
+                document.getElementById('confirm-approve-btn').addEventListener('click', async () => {
+                    if (!pendingApproveId) return;
+                    const targetId = pendingApproveId;
+                    closeApproveModal();
                     
                     const formData = new URLSearchParams();
                     formData.append('targetId', targetId);
@@ -427,7 +454,7 @@
                     } catch(e) {
                         alert("Network error. Could not approve registrar.");
                     }
-                }
+                });
 
                 async function handleStaffProvisioning() {
                     if (!globalDomain) {
@@ -435,7 +462,6 @@
                         return;
                     }
 
-                    // Generate random 8-digit Employee ID prefix
                     const prefix = Math.floor(10000000 + Math.random() * 90000000).toString();
                     const role = document.getElementById('prov-staff-role').value;
                     
@@ -447,7 +473,7 @@
                     const formData = new URLSearchParams();
                     formData.append('username', prefix);
                     formData.append('role', role);
-                    formData.append('birthdate', dob); // Real date captured here
+                    formData.append('birthdate', dob); 
                     formData.append('firstName', fn);
                     formData.append('lastName', ln);
                     formData.append('middleInitial', mi);

@@ -16,6 +16,7 @@ public class SqliteUserRepository implements UserRepository {
     }
 
     private void initTable() {
+        // Changes for rate-limiting implementation: added failed_login_attempts and lockout_until columns
         String sql = """
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
@@ -30,7 +31,9 @@ public class SqliteUserRepository implements UserRepository {
                 is_claimed INTEGER NOT NULL,
                 needs_password_reset INTEGER NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 1,
-                is_approved INTEGER NOT NULL DEFAULT 1
+                is_approved INTEGER NOT NULL DEFAULT 1,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                lockout_until INTEGER NOT NULL DEFAULT 0
             );
             """;
         try (Connection conn = DatabaseConnection.getConnection();
@@ -70,9 +73,10 @@ public class SqliteUserRepository implements UserRepository {
 
     @Override
     public void save(User user) {
+        // Changes for rate-limiting implementation: mapped failed_login_attempts and lockout_until in INSERT and UPDATE
         String sql = """
-            INSERT INTO users(id, username, email, password_hash, role, birthdate, first_name, last_name, middle_initial, is_claimed, needs_password_reset, is_active, is_approved) 
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO users(id, username, email, password_hash, role, birthdate, first_name, last_name, middle_initial, is_claimed, needs_password_reset, is_active, is_approved, failed_login_attempts, lockout_until) 
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(id) DO UPDATE SET 
                 password_hash=excluded.password_hash, 
                 email=excluded.email,
@@ -82,7 +86,9 @@ public class SqliteUserRepository implements UserRepository {
                 is_claimed=excluded.is_claimed, 
                 needs_password_reset=excluded.needs_password_reset, 
                 is_active=excluded.is_active,
-                is_approved=excluded.is_approved;
+                is_approved=excluded.is_approved,
+                failed_login_attempts=excluded.failed_login_attempts,
+                lockout_until=excluded.lockout_until;
             """;
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -99,6 +105,8 @@ public class SqliteUserRepository implements UserRepository {
             pstmt.setInt(11, user.needsPasswordReset() ? 1 : 0);
             pstmt.setInt(12, user.isActive() ? 1 : 0);
             pstmt.setInt(13, user.isApproved() ? 1 : 0);
+            pstmt.setInt(14, user.getFailedLoginAttempts());
+            pstmt.setLong(15, user.getLockoutUntil());
             pstmt.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to save user", e);
@@ -118,6 +126,7 @@ public class SqliteUserRepository implements UserRepository {
     }
 
     private User mapToUser(ResultSet rs) throws SQLException {
+        // Changes for rate-limiting implementation: extracting failed_login_attempts and lockout_until into the constructor
         return new User(
             rs.getString("id"),
             rs.getString("username"),
@@ -131,7 +140,9 @@ public class SqliteUserRepository implements UserRepository {
             rs.getInt("is_claimed") == 1,
             rs.getInt("needs_password_reset") == 1,
             rs.getInt("is_active") == 1,
-            rs.getInt("is_approved") == 1
+            rs.getInt("is_approved") == 1,
+            rs.getInt("failed_login_attempts"),
+            rs.getLong("lockout_until")
         );
     }
 

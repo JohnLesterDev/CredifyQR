@@ -18,6 +18,7 @@ import dev.vertesix.credifyqr.Identity.core.service.IdentityService;
 
 import java.util.UUID;
 
+// Wired SqliteAuditRepository into bootstrap and injected into IdentityService
 public class App {
     private static final Logger logger = LoggerFactory.getLogger(App.class);
 
@@ -30,23 +31,20 @@ public class App {
             throw new RuntimeException("FATAL: JWT_SECRET is missing.");
         }
 
-        // 1. Initialize Infrastructure
         DatabaseConnection.init(dbUrl);
         JwtProvider.init(jwtSecret);
 
-        // 2. Initialize Adapters (No longer passing dbUrl)
         UserRepository userRepository = new SqliteUserRepository();
         SettingsRepository settingsRepository = new SqliteSettingsRepository();
         TokenBlacklistRepository blacklistRepository = new SqliteBlacklistRepository();
         PasswordGenerator passwordGenerator = new SecurePasswordAdapter();
+        AuditRepository auditRepository = new SqliteAuditRepository();
 
-        // 3. Core Service & Controller Initialization
-        IdentityUseCase identityService = new IdentityService(userRepository, settingsRepository, passwordGenerator);
+        IdentityUseCase identityService = new IdentityService(userRepository, settingsRepository, passwordGenerator, auditRepository);
         AuthMiddleware.init(blacklistRepository); 
         AuthController authController = new AuthController(identityService, blacklistRepository);
         PageController pageController = new PageController(identityService);
 
-        // 4. Javalin Setup
         Javalin app = Javalin.create(config -> {
             config.showJavalinBanner = false;
             config.fileRenderer(new JavalinThymeleaf(createTemplateEngine()));
@@ -54,18 +52,14 @@ public class App {
             config.http.defaultContentType = "text/html; charset=UTF-8";
         }).start(dotenv.get("HOST", "localhost"), Integer.parseInt(dotenv.get("PORT", "5555")));
 
-        // 5. Routes
         authController.registerRoutes(app);
         pageController.registerRoutes(app); 
 
-        // 6. RBAC Overhaul
         app.before("/api/student/*", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
         app.before("/api/change-password", ctx -> AuthMiddleware.requireRole(ctx, Role.values()));
         
-        // SysAdmin restricted routes
         app.before("/api/admin/settings/*", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN));
         
-        // Provisioning logic: Staff creation (SysAdmin only), Student creation (Registrar/SysAdmin)
         app.before("/api/admin/users", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
 
         app.before("/api/admin/users/approve", ctx -> AuthMiddleware.requireRole(ctx, Role.CAMPUS_DIRECTOR));
@@ -84,10 +78,11 @@ public class App {
                 org.mindrot.jbcrypt.BCrypt.hashpw("admin123", org.mindrot.jbcrypt.BCrypt.gensalt(12)), 
                 Role.SYSTEM_ADMIN, 
                 "2000-01-01",
-                "System",      // firstName
-                "Administrator", // lastName
-                "V",            // middleInitial
-                true, false, true, true // isClaimed, needsPasswordReset, isActive, isApproved
+                "System",      
+                "Administrator", 
+                "V",             
+                true, false, true, true,
+                0, 0L 
             );
             repo.save(sysAdmin);
             logger.info("SYSTEM_ADMIN seeded. User: sysadmin");

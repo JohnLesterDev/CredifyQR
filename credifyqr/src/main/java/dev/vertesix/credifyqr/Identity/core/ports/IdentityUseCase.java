@@ -7,27 +7,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+// Mutated interface to require network context (IP) for compliant audit trails
 public interface IdentityUseCase {
-    Optional<User> authenticate(String username, String password);
-    void registerUser(String username, String password, String role);
+    Optional<User> authenticate(String username, String password, String ipAddress);
+    void registerUser(String username, String password, String role, String ipAddress);
     
-    // Provisioning updated with name fields
-    Map<String, Object> provisionUser(String creatorId, String newUsername, String birthdate, Role targetRole, String firstName, String lastName, String middleInitial);
+    Map<String, Object> provisionUser(String creatorId, String newUsername, String birthdate, Role targetRole, String firstName, String lastName, String middleInitial, String ipAddress);
     
     Optional<User> findById(String id);
     
-    // Student Pipeline
-    String claimAccount(String identifier, String birthdate);
+    String claimAccount(String identifier, String birthdate, String ipAddress);
     
-    // Employee Pipeline (ID + BDay -> Set Work Email -> Temp Password)
-    String claimStaffAccount(String employeeId, String birthdate, String newEmail);
+    String claimStaffAccount(String employeeId, String birthdate, String newEmail, String ipAddress);
     
-    void changePassword(String userId, String newPassword);
+    void changePassword(String userId, String newPassword, String ipAddress);
     String getInstitutionDomain();
-    void updateInstitutionDomain(String directorId, String password, String newDomain);
+    void updateInstitutionDomain(String directorId, String password, String newDomain, String ipAddress);
 
     List<User> getAllUsers(String requestingUserId);
     
-    // Role-specific Approval Pipeline
-    void approveRegistrar(String directorId, String targetRegistrarId);
+    void approveRegistrar(String directorId, String targetRegistrarId, String ipAddress);
 }

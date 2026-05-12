@@ -2,13 +2,12 @@ package dev.vertesix.credifyqr.Identity.core.domain;
 
 public class User {
     private final String id;
-    private final String username; // Student ID or Employee ID
-    private String email;          // Staff Email (required for Staff claims)
+    private final String username;
+    private String email;
     private String passwordHash;
     private final Role role;
-    private final String birthdate; 
+    private final String birthdate;
     
-    // New fields for Task 2
     private String firstName;
     private String lastName;
     private String middleInitial;
@@ -16,9 +15,11 @@ public class User {
     private boolean isClaimed;
     private boolean needsPasswordReset;
     private boolean isActive;
-    
-    // New field for Task 5
     private boolean isApproved;
+
+    // Changes for rate-limiting implementation: tracking brute-force vectors
+    private int failedLoginAttempts;
+    private long lockoutUntil;
 
     public User(
         String id, 
@@ -33,7 +34,9 @@ public class User {
         boolean isClaimed, 
         boolean needsPasswordReset,
         boolean isActive,
-        boolean isApproved
+        boolean isApproved,
+        int failedLoginAttempts,
+        long lockoutUntil
         ) {
         this.id = id;
         this.username = username;
@@ -48,9 +51,10 @@ public class User {
         this.needsPasswordReset = needsPasswordReset;
         this.isActive = isActive;
         this.isApproved = isApproved;
+        this.failedLoginAttempts = failedLoginAttempts;
+        this.lockoutUntil = lockoutUntil;
     }
 
-    // Getters and Setters
     public String getId() { return id; }
     public String getUsername() { return username; }
     public String getEmail() { return email; }
@@ -69,7 +73,7 @@ public class User {
 
     public String getFullName() {
         if ((firstName == null || firstName.isBlank()) && (lastName == null || lastName.isBlank())) {
-            return username; // Fallback for legacy seeded accounts
+            return username;
         }
         String mi = (middleInitial != null && !middleInitial.isBlank()) ? " " + middleInitial + "." : "";
         return (lastName != null ? lastName + ", " : "") + (firstName != null ? firstName : "") + mi;
@@ -84,6 +88,11 @@ public class User {
     
     public boolean isApproved() { return isApproved; }
     public void setApproved(boolean approved) { this.isApproved = approved; }
+    
+    public int getFailedLoginAttempts() { return failedLoginAttempts; }
+    public void setFailedLoginAttempts(int failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
+    public long getLockoutUntil() { return lockoutUntil; }
+    public void setLockoutUntil(long lockoutUntil) { this.lockoutUntil = lockoutUntil; }
     
     public boolean isTemporary() { return needsPasswordReset; }
     public boolean isSysAdmin() { return this.role == Role.SYSTEM_ADMIN; }

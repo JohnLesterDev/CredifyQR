@@ -9,12 +9,14 @@ import dev.vertesix.credifyqr.Identity.core.domain.User;
 import dev.vertesix.credifyqr.Identity.core.ports.IdentityUseCase;
 import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
 import dev.vertesix.credifyqr.Identity.core.security.SanitizerUtil;
+
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.Cookie;
 import io.javalin.http.SameSite;
 import io.jsonwebtoken.Claims;
 
+// Updated controller routes to extract ctx.ip() and pass network context into the domain
 public class AuthController {
 
     private final IdentityUseCase identityUseCase;
@@ -38,10 +40,8 @@ public class AuthController {
         app.post("/api/admin/users", this::provisionUser);
         app.post("/api/admin/users/approve", this::approveRegistrar);
         
-        // ADD THIS: Public read-only route for the login page
         app.get("/api/public/domain", this::getDomain);
         
-        // Keep these for the authenticated SysAdmin dashboard
         app.get("/api/admin/settings/domain", this::getDomain);
         app.post("/api/admin/settings/domain", this::setDomain);
 
@@ -50,17 +50,16 @@ public class AuthController {
     }
 
     private void login(Context ctx) {
-        // Drop SanitizerUtil so the '@' symbol in emails survives
         String usernameOrEmail = ctx.formParam("username");
         String password = ctx.formParam("password");
         boolean rememberMe = Boolean.parseBoolean(ctx.formParam("rememberMe"));
+        String ipAddress = ctx.ip();
 
         if (usernameOrEmail == null || password == null) {
             ctx.status(400).result("Missing credentials");
             return;
         }
 
-        // Clean whitespace and normalize case for emails
         usernameOrEmail = usernameOrEmail.trim();
         if (usernameOrEmail.contains("@")) {
             usernameOrEmail = usernameOrEmail.toLowerCase();
@@ -68,39 +67,42 @@ public class AuthController {
 
         String referer = ctx.header("Referer");
         if (referer != null && !referer.contains("/admin")) {
-            // Student portal strictly requires numeric ID
             if (!usernameOrEmail.matches("\\d+")) {
                 ctx.status(400).result("Credential ID must be numeric.");
                 return;
             }
         }
 
-        Optional<User> authenticatedUser = identityUseCase.authenticate(usernameOrEmail, password);
+        try {
+            Optional<User> authenticatedUser = identityUseCase.authenticate(usernameOrEmail, password, ipAddress);
 
-        if (authenticatedUser.isPresent()) {
-            User user = authenticatedUser.get();
-            String token = JwtProvider.createToken(user.getId(), user.getRole().name(), rememberMe);
-            
-            Cookie jwtCookie = new Cookie("auth_token", token);
-            jwtCookie.setHttpOnly(true);
-            jwtCookie.setSecure(false);
-            jwtCookie.setSameSite(SameSite.STRICT);
-            jwtCookie.setPath("/");
-            
-            if (rememberMe) {
-                jwtCookie.setMaxAge(30 * 24 * 60 * 60); 
+            if (authenticatedUser.isPresent()) {
+                User user = authenticatedUser.get();
+                String token = JwtProvider.createToken(user.getId(), user.getRole().name(), rememberMe);
+                
+                Cookie jwtCookie = new Cookie("auth_token", token);
+                jwtCookie.setHttpOnly(true);
+                jwtCookie.setSecure(false);
+                jwtCookie.setSameSite(SameSite.STRICT);
+                jwtCookie.setPath("/");
+                
+                if (rememberMe) {
+                    jwtCookie.setMaxAge(30 * 24 * 60 * 60); 
+                }
+                
+                ctx.cookie(jwtCookie);
+                
+                Cookie prefCookie = new Cookie("portal_pref", user.getRole() == Role.STUDENT ? "student" : "admin");
+                prefCookie.setPath("/");
+                prefCookie.setMaxAge(365 * 24 * 60 * 60);
+                ctx.cookie(prefCookie);
+                
+                ctx.status(200).result("Login successful");
+            } else {
+                ctx.status(401).result("Invalid credentials, pending approval, or account suspended.");
             }
-            
-            ctx.cookie(jwtCookie);
-            
-            Cookie prefCookie = new Cookie("portal_pref", user.getRole() == Role.STUDENT ? "student" : "admin");
-            prefCookie.setPath("/");
-            prefCookie.setMaxAge(365 * 24 * 60 * 60);
-            ctx.cookie(prefCookie);
-            
-            ctx.status(200).result("Login successful");
-        } else {
-            ctx.status(401).result("Invalid credentials, pending approval, or account suspended.");
+        } catch (SecurityException e) {
+            ctx.status(429).result(e.getMessage());
         }
     }
 
@@ -147,6 +149,7 @@ public class AuthController {
     private void claimAccount(Context ctx) {
         String studentId = SanitizerUtil.clean(ctx.formParam("studentId"));
         String birthdate = SanitizerUtil.clean(ctx.formParam("birthdate"));
+        String ipAddress = ctx.ip();
 
         if (studentId == null || birthdate == null) {
             ctx.status(400).result("Missing verification details.");
@@ -154,7 +157,7 @@ public class AuthController {
         }
 
         try {
-            String tempPassword = identityUseCase.claimAccount(studentId, birthdate);
+            String tempPassword = identityUseCase.claimAccount(studentId, birthdate, ipAddress);
             ctx.status(200).result(tempPassword); 
         } catch (IllegalArgumentException e) {
             ctx.status(400).result(e.getMessage());
@@ -167,17 +170,16 @@ public class AuthController {
         String employeeId = ctx.formParam("employeeId");
         String birthdate = ctx.formParam("birthdate");
         String email = ctx.formParam("email");
+        String ipAddress = ctx.ip();
 
         if (employeeId == null || email == null || birthdate == null) {
             ctx.status(400).result("Missing staff verification details.");
             return;
         }
 
-        // Standard trim for ID and Birthdate
         employeeId = employeeId.trim();
         birthdate = birthdate.trim();
 
-        // GUARD CLAUSE: Enforce Institutional Domain Boundary
         try {
             String requiredDomain = identityUseCase.getInstitutionDomain();
             if (requiredDomain == null || requiredDomain.isBlank()) {
@@ -185,17 +187,14 @@ public class AuthController {
                 return;
             }
             
-            // AGGRESSIVE SANITIZATION: Kill all unicode spaces, \r, \n, and non-printable artifacts
             requiredDomain = requiredDomain.replaceAll("[^a-zA-Z0-9.-]", "").toLowerCase();
             String cleanEmail = email.replaceAll("[^a-zA-Z0-9.@_-]", "").toLowerCase();
             
             if (!cleanEmail.endsWith("@" + requiredDomain)) {
-                // If it fails, this will expose exactly what the backend evaluated
                 ctx.status(400).result(String.format("Security violation: [%s] does not match domain [@%s]", cleanEmail, requiredDomain));
                 return;
             }
             
-            // Safe to proceed with strictly cleaned email
             email = cleanEmail;
             
         } catch (Exception e) {
@@ -204,7 +203,7 @@ public class AuthController {
         }
 
         try {
-            String tempPassword = identityUseCase.claimStaffAccount(employeeId, birthdate, email);
+            String tempPassword = identityUseCase.claimStaffAccount(employeeId, birthdate, email, ipAddress);
             ctx.status(200).result(tempPassword);
         } catch (IllegalArgumentException e) {
             ctx.status(400).result(e.getMessage());
@@ -216,6 +215,7 @@ public class AuthController {
     public void changePassword(Context ctx) {
         String userId = ctx.attribute("userId"); 
         String newPassword = ctx.formParam("newPassword");
+        String ipAddress = ctx.ip();
 
         if (userId == null) {
             ctx.status(401).result("Unauthorized.");
@@ -228,8 +228,10 @@ public class AuthController {
         }
 
         try {
-            identityUseCase.changePassword(userId, newPassword);
+            identityUseCase.changePassword(userId, newPassword, ipAddress);
             ctx.status(200).result("Password updated successfully.");
+        } catch (IllegalArgumentException e) {
+            ctx.status(400).result(e.getMessage());
         } catch (Exception e) {
             ctx.status(500).result("Update failed.");
         }
@@ -237,6 +239,8 @@ public class AuthController {
 
     private void provisionUser(Context ctx) {
         String creatorId = ctx.attribute("userId");
+        String ipAddress = ctx.ip();
+        
         if (creatorId == null) {
             ctx.status(401).result("Unauthorized.");
             return;
@@ -246,7 +250,6 @@ public class AuthController {
         String roleStr = SanitizerUtil.clean(ctx.formParam("role"));
         String birthdate = SanitizerUtil.clean(ctx.formParam("birthdate"));
         
-        // NEW PARAMETERS EXTRACTED HERE
         String firstName = SanitizerUtil.clean(ctx.formParam("firstName"));
         String lastName = SanitizerUtil.clean(ctx.formParam("lastName"));
         String middleInitial = SanitizerUtil.clean(ctx.formParam("middleInitial"));
@@ -270,7 +273,8 @@ public class AuthController {
                 creatorId, newUsername, birthdate, targetRole, 
                 firstName == null ? "" : firstName, 
                 lastName == null ? "" : lastName, 
-                middleInitial == null ? "" : middleInitial
+                middleInitial == null ? "" : middleInitial,
+                ipAddress
             );
             
             User provisionedUser = (User) result.get("user");
@@ -292,6 +296,7 @@ public class AuthController {
     private void approveRegistrar(Context ctx) {
         String directorId = ctx.attribute("userId");
         String targetId = SanitizerUtil.clean(ctx.formParam("targetId"));
+        String ipAddress = ctx.ip();
         
         if (directorId == null) {
             ctx.status(401).result("Unauthorized.");
@@ -303,7 +308,7 @@ public class AuthController {
         }
         
         try {
-            identityUseCase.approveRegistrar(directorId, targetId);
+            identityUseCase.approveRegistrar(directorId, targetId, ipAddress);
             ctx.status(200).result("Registrar approved successfully.");
         } catch (SecurityException | IllegalArgumentException e) {
             ctx.status(400).result(e.getMessage());
@@ -325,6 +330,7 @@ public class AuthController {
         String adminId = ctx.attribute("userId");
         String password = ctx.formParam("password");
         String domain = SanitizerUtil.clean(ctx.formParam("domain"));
+        String ipAddress = ctx.ip();
 
         if (adminId == null || password == null || domain == null) {
             ctx.status(400).result("Missing required parameters.");
@@ -332,7 +338,7 @@ public class AuthController {
         }
 
         try {
-            identityUseCase.updateInstitutionDomain(adminId, password, domain);
+            identityUseCase.updateInstitutionDomain(adminId, password, domain, ipAddress);
             ctx.status(200).result("Domain locked successfully.");
         } catch (SecurityException | IllegalArgumentException e) {
             ctx.status(400).result(e.getMessage());
@@ -348,12 +354,12 @@ public class AuthController {
                 .map(u -> Map.<String, Object>of(
                     "id", u.getId(),
                     "username", u.getUsername(),
-                    "fullName", u.getFullName(), // Added for dashboard roster
+                    "fullName", u.getFullName(),
                     "email", u.getEmail() == null ? "N/A" : u.getEmail(),
                     "role", u.getRole().name(),
                     "status", u.isActive() ? 
                         (u.isClaimed() ? "Active" : "Unclaimed") : "Suspended",
-                    "isApproved", u.isApproved() // Expose approval state
+                    "isApproved", u.isApproved() 
                 )).toList();
             ctx.status(200).json(safeList);
         } catch (Exception e) {
