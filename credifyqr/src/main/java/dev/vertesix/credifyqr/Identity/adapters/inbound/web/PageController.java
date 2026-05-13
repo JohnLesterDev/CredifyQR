@@ -23,6 +23,9 @@ public class PageController {
         app.get("/admin", this::showAdminLogin);
         app.get("/dashboard", this::showDashboard);
         app.get("/force-password-change", this::showForcePasswordChange);
+        
+        // NEW: Employer/Scanner UI Routing
+        app.get("/verify/{id}", this::showVerifyPage);
     }
 
     private String getUserIdFromToken(Context ctx) {
@@ -120,5 +123,11 @@ public class PageController {
         Map<String, Object> model = new HashMap<>();
         model.put("nonce", nonce);
         ctx.render("admin-login", model);
+    }
+
+    private void showVerifyPage(Context ctx) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("docId", ctx.pathParam("id"));
+        ctx.render("verify", model);
     }
 }

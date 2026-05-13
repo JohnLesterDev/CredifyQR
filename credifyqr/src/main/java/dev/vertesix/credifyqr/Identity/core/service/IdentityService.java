@@ -187,6 +187,13 @@ public class IdentityService implements IdentityUseCase {
             throw new IllegalArgumentException("Work email is required to claim an Employee account.");
         }
 
+        // --- NEW FIX: Enforce Email Uniqueness ---
+        Optional<User> existingUser = userRepository.findByEmail(newEmail);
+        if (existingUser.isPresent() && !existingUser.get().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("This email is already registered to another active account.");
+        }
+        // -----------------------------------------
+
         user.setEmail(newEmail);
         String tempPwd = executeClaim(user);
         logAudit(user.getId(), ActionType.ACCOUNT_CLAIMED, user.getId(), ipAddress);

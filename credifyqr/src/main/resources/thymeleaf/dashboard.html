@@ -67,8 +67,14 @@
                 <button class="tab-btn" onclick="clearAppStorage()" style="margin-left: auto; background: rgba(231, 76, 60, 0.1); border-color: rgba(231, 76, 60, 0.3); color: var(--danger);">Hard Reset Storage</button>
             </div>
             
+            <div th:if="${role == 'REGISTRAR_STAFF'}" style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; padding-bottom: 1rem;">
+                <button class="tab-btn active" onclick="switchTab('overview')">Provisioning</button>
+                <button class="tab-btn" onclick="switchTab('uploads')">Pending Uploads</button>
+            </div>
+
             <div th:if="${role == 'CAMPUS_DIRECTOR'}" style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem; padding-bottom: 1rem;">
-                <button class="tab-btn active" onclick="switchTab('approvals')">Pending Approvals</button>
+                <button class="tab-btn active" onclick="switchTab('approvals')">Pending Registrars</button>
+                <button class="tab-btn" onclick="switchTab('docs')">Document Signatures</button>
                 <button class="tab-btn" onclick="switchTab('users')">System Roster</button>
             </div>
 
@@ -120,7 +126,61 @@
 
                 <div th:if="${role == 'STUDENT'}" class="data-section">
                     <h3>Academic Credentials</h3>
-                    <p>Digital documents officially issued and ready for external verification.</p>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Digital documents officially issued and ready for external verification.</p>
+                    
+                    <form onsubmit="event.preventDefault(); requestDocument();" style="display: flex; gap: 10px; margin-bottom: 2rem;">
+                        <select id="doc-request-type" style="flex: 2;" required>
+                            <option value="" disabled selected>Select Document Type...</option>
+                            <option value="LEDGER">Financial Ledger</option>
+                            <option value="COR">Certificate of Registration (COR)</option>
+                            <option value="GRADES">Official Grades</option>
+                        </select>
+                        <button type="submit" style="flex: 1; margin: 0;">Request Issuance</button>
+                    </form>
+
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <th style="padding: 10px;">Type</th>
+                                <th style="padding: 10px;">Status</th>
+                                <th style="padding: 10px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="student-docs-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-uploads" style="display: none;" th:if="${role == 'REGISTRAR_STAFF'}">
+                <div class="data-section">
+                    <h3>Pending Document Requests</h3>
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <th style="padding: 10px;">Student ID</th>
+                                <th style="padding: 10px;">Document Type</th>
+                                <th style="padding: 10px;">Upload PDF</th>
+                            </tr>
+                        </thead>
+                        <tbody id="registrar-uploads-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-docs" style="display: none;" th:if="${role == 'CAMPUS_DIRECTOR'}">
+                <div class="data-section">
+                    <h3>Awaiting Cryptographic Signature</h3>
+                    <p style="color:var(--text-secondary); margin-bottom:1rem; font-size:0.9rem;">Approve documents to attach the QR Stamp and route back to student.</p>
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <th style="padding: 10px;">Student ID</th>
+                                <th style="padding: 10px;">Document Type</th>
+                                <th style="padding: 10px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="director-docs-body"></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -175,7 +235,7 @@
                 </div>
             </div>
 
-            <div id="tab-approvals" th:if="${role == 'CAMPUS_DIRECTOR'}">
+            <div id="tab-approvals" style="display:none;" th:if="${role == 'CAMPUS_DIRECTOR'}">
                 <div class="data-section">
                     <h3>Pending Registrar Approvals</h3>
                     <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
@@ -196,6 +256,7 @@
                 </div>
             </div>
 
+            <!-- Modals -->
             <div id="domain-modal" class="modal-overlay" onclick="closeDomainModal(event)">
                 <div class="modal-card" onclick="event.stopPropagation()">
                     <h3>Change Domain</h3>
@@ -218,7 +279,6 @@
                 </div>
             </div>
 
-            <!-- Custom Approval Modal -->
             <div id="approve-modal" class="modal-overlay" onclick="closeApproveModal(event)">
                 <div class="modal-card" onclick="event.stopPropagation()">
                     <h3>Confirm Authorization</h3>
@@ -234,7 +294,7 @@
                 const currentRole = /*[[${role}]]*/ 'STUDENT';
                 let globalDomain = "";
                 let isModalForced = false;
-                let pendingApproveId = null; // Track target for approval modal
+                let pendingApproveId = null;
 
                 document.addEventListener('DOMContentLoaded', async () => {
                     if (currentRole === 'SYSTEM_ADMIN') {
@@ -243,8 +303,140 @@
                     if (currentRole === 'SYSTEM_ADMIN' || currentRole === 'CAMPUS_DIRECTOR') {
                         loadUserTable();
                     }
+                    if (currentRole === 'STUDENT') loadStudentDocs();
+                    if (currentRole === 'REGISTRAR_STAFF') loadRegistrarDocs();
+                    if (currentRole === 'CAMPUS_DIRECTOR') loadDirectorDocs();
                 });
 
+                // Tab Switcher
+                function switchTab(tabId) {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    event.target.classList.add('active');
+                    
+                    const overview = document.getElementById('tab-overview');
+                    const users = document.getElementById('tab-users');
+                    const approvals = document.getElementById('tab-approvals');
+                    const uploads = document.getElementById('tab-uploads');
+                    const docs = document.getElementById('tab-docs');
+                    
+                    if(overview) overview.style.display = tabId === 'overview' ? 'block' : 'none';
+                    if(users) users.style.display = tabId === 'users' ? 'block' : 'none';
+                    if(approvals) approvals.style.display = tabId === 'approvals' ? 'block' : 'none';
+                    if(uploads) uploads.style.display = tabId === 'uploads' ? 'block' : 'none';
+                    if(docs) docs.style.display = tabId === 'docs' ? 'block' : 'none';
+                    
+                    if (tabId === 'users' || tabId === 'approvals') loadUserTable();
+                    if (tabId === 'uploads') loadRegistrarDocs();
+                    if (tabId === 'docs') loadDirectorDocs();
+                }
+
+                // ---------------------------------------------------------
+                // --- DOCUMENT PIPELINE LOGIC (PHASE 3/4)
+                // ---------------------------------------------------------
+
+                // Student Logic
+                async function requestDocument() {
+                    const type = document.getElementById('doc-request-type').value;
+                    const formData = new URLSearchParams();
+                    formData.append('type', type);
+                    
+                    try {
+                        const resp = await fetch('/api/docs/request', { method: 'POST', body: formData, credentials: 'same-origin' });
+                        if (resp.ok) { loadStudentDocs(); } 
+                        else { alert(await resp.text()); }
+                    } catch(e) { alert("Network Error"); }
+                }
+
+                async function loadStudentDocs() {
+                    const tbody = document.getElementById('student-docs-body');
+                    if(!tbody) return;
+                    tbody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+                    const resp = await fetch('/api/docs/student');
+                    if (resp.ok) {
+                        const docs = await resp.json();
+                        tbody.innerHTML = docs.map(d => `
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 10px; font-weight:600;">${d.type}</td>
+                                <td style="padding: 10px;">
+                                    <span class="role-badge" style="background: ${d.status === 'APPROVED' ? 'var(--success)' : 'var(--text-secondary)'}">${d.status}</span>
+                                </td>
+                                <td style="padding: 10px;">
+                                    ${d.status === 'APPROVED' ? `<a href="/api/docs/${d.id}/download" class="role-badge" style="background:var(--accent); text-decoration:none;">Download</a>` : '<span style="color:var(--text-secondary); font-size:0.8rem;">Processing...</span>'}
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+
+                // Registrar Logic
+                async function loadRegistrarDocs() {
+                    const tbody = document.getElementById('registrar-uploads-body');
+                    if(!tbody) return;
+                    const resp = await fetch('/api/docs/registrar/pending');
+                    if (resp.ok) {
+                        const docs = await resp.json();
+                        tbody.innerHTML = docs.map(d => `
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 10px; font-family:monospace;">${d.studentId}</td>
+                                <td style="padding: 10px; font-weight:600;">${d.type}</td>
+                                <td style="padding: 10px; display:flex; gap:10px;">
+                                    <input type="file" id="file-${d.id}" accept="application/pdf" style="padding:6px; background:var(--bg-primary);">
+                                    <button onclick="uploadPdf('${d.id}', this)" style="margin:0; padding:6px 12px; font-size:0.8rem;">Upload</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+
+                async function uploadPdf(docId, btn) {
+                    const fileInput = document.getElementById(`file-${docId}`);
+                    if (!fileInput.files.length) { alert("Please select a PDF."); return; }
+                    
+                    const formData = new FormData();
+                    formData.append("pdf", fileInput.files[0]);
+
+                    btn.textContent = "Uploading...";
+                    btn.disabled = true;
+
+                    try {
+                        const resp = await fetch(`/api/docs/${docId}/upload`, { method: 'POST', body: formData, credentials: 'same-origin' });
+                        if (resp.ok) { loadRegistrarDocs(); } 
+                        else { alert(await resp.text()); btn.textContent = "Upload"; btn.disabled = false; }
+                    } catch(e) { alert("Network Error"); btn.textContent = "Upload"; btn.disabled = false; }
+                }
+
+                // Director Logic
+                async function loadDirectorDocs() {
+                    const tbody = document.getElementById('director-docs-body');
+                    if(!tbody) return;
+                    const resp = await fetch('/api/docs/director/pending');
+                    if (resp.ok) {
+                        const docs = await resp.json();
+                        tbody.innerHTML = docs.map(d => `
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 10px; font-family:monospace;">${d.studentId}</td>
+                                <td style="padding: 10px; font-weight:600;">${d.type}</td>
+                                <td style="padding: 10px;">
+                                    <button onclick="approvePdf('${d.id}', this)" style="margin:0; padding:6px 12px; font-size:0.8rem; background:var(--success);">Stamp & Approve</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+
+                async function approvePdf(docId, btn) {
+                    btn.textContent = "Stamping...";
+                    btn.disabled = true;
+                    try {
+                        const resp = await fetch(`/api/docs/${docId}/approve`, { method: 'POST', credentials: 'same-origin' });
+                        if (resp.ok) { loadDirectorDocs(); } 
+                        else { alert(await resp.text()); btn.textContent = "Stamp & Approve"; btn.disabled = false; }
+                    } catch(e) { alert("Network Error"); btn.textContent = "Stamp & Approve"; btn.disabled = false; }
+                }
+
+                // ---------------------------------------------------------
+                // --- IDENTITY LOGIC (EXISTING)
+                // ---------------------------------------------------------
                 async function fetchDomain() {
                     const resp = await fetch('/api/admin/settings/domain');
                     const data = await resp.json();
@@ -352,21 +544,6 @@
                     }
                 }
 
-                function switchTab(tabId) {
-                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                    event.target.classList.add('active');
-                    
-                    const overview = document.getElementById('tab-overview');
-                    const users = document.getElementById('tab-users');
-                    const approvals = document.getElementById('tab-approvals');
-                    
-                    if(overview) overview.style.display = tabId === 'overview' ? 'block' : 'none';
-                    if(users) users.style.display = tabId === 'users' ? 'block' : 'none';
-                    if(approvals) approvals.style.display = tabId === 'approvals' ? 'block' : 'none';
-                    
-                    if (tabId === 'users' || tabId === 'approvals') loadUserTable();
-                }
-
                 async function loadUserTable() {
                     const tbody = document.getElementById('user-table-body');
                     const appBody = document.getElementById('approval-table-body');
@@ -418,7 +595,6 @@
                     }
                 }
 
-                // New Approval Modal Logic
                 function openApproveModal(targetId) {
                     pendingApproveId = targetId;
                     document.getElementById('approve-modal').style.display = 'flex';

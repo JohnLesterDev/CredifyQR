@@ -1,8 +1,4 @@
 <div align="center">
-  <!-- 
-    TODO: Add banner image here once assets are finalized.
-    <a href="https://github.com/JohnLesterDev/CredifyQR"><img src=".static/credifyqr_banner.png"></a> 
-  -->
   <h1>CredifyQR</h1>
   <p><b>Web-Based Student Credential Issuance and QR-Authentication System</b></p>
   <br>
@@ -15,83 +11,95 @@
 ---
 <h2 align="center" id="title-credifyqr">Table of Contents</h2>
 <div align="center">
-  <a href="#description">Description</a> ●
-  <a href="#features">Features</a> ●
+  <a href="#introduction--description">Introduction</a> ●
   <a href="#system-architecture">System Architecture</a> ●
-  <a href="#installation">Installation</a> ●
+  <a href="#installation--user-guide">Installation & User Guide</a> ●
   <a href="#acknowledgements">Acknowledgements</a> ●
-  <a href="#contact-details">Contacts</a>
+  <a href="#contacts">Contacts</a>
 </div>
 
 <br><br>
 
-## Description
+## Introduction & Description
+[cite_start]The integrity of academic credentials is under constant threat from a globalized market of document forgery that undermines the value of legitimate degrees[cite: 22]. [cite_start]Registrar offices are currently bogged down by manual verification requests that are slow, error-prone, and inefficient[cite: 23]. 
 
-CredifyQR is a web-based prototype designed to automate the generation and validation of academic credentials. Engineered to address the inefficiencies of manual registrar workflows and the rising threat of credential forgery, this system ensures that student qualifications are instantly verifiable in a fast-paced, digital job market.
-
-By automating document issuance and providing a secure, tamper-evident validation portal via embedded QR codes, CredifyQR modernizes institutional operations. It empowers external verifiers (such as employers) to authenticate documents instantly without requiring a system account, while ensuring the core academic database remains strictly isolated and secure.
-
-[back to top](#title-credifyqr)
-
----
-
-## Features
-
-- **Instant QR-Based Verification:** Generates academic credentials embedded with QR codes containing high-entropy validation tokens. External verifiers can scan these codes to access a public verification page instantly, requiring no account creation or proprietary software.
-- **Role-Based Access Control (RBAC):** Enforces a strict hierarchical workflow involving Students, Registrar Staff, and the Campus Director. Credentials must pass through an institutional authorization stage before official issuance.
-- **Hexagonal Architecture:** Decouples core business logic from external interfaces. Utilizing Ports and Adapters, the system isolates identity management from core document processing, ensuring high maintainability and error-resilience.
-- **Bounded Contexts:** Adopts Domain-Driven Design principles to strictly separate the *Identity Context* (user authentication and authorization) from the *Credential Context* (document lifecycle, token generation, and QR creation).
-- **Lightweight Infrastructure:** Developed using Java, the Javalin web framework, and SQLite, resulting in a highly efficient, server-independent prototype tailored for localized institutional deployment.
-
-[back to top](#title-credifyqr)
-
----
+[cite_start]CredifyQR is a web-based prototype designed to automate the generation and validation of academic credentials[cite: 64]. [cite_start]The system addresses the fundamental disconnect between document issuance and authenticity validation[cite: 30]. [cite_start]By automating document issuance and providing instant, tamper-evident validation, CredifyQR modernizes institutional workflows while keeping the core database isolated and secure[cite: 28]. [cite_start]This eliminates the "request and wait" cycle that delays students' professional mobility [cite: 34][cite_start], and provides external verifiers a low-friction process to confirm qualifications instantly[cite: 57].
 
 ## System Architecture
+[cite_start]CredifyQR is engineered using Java, the lightweight Javalin web framework, and SQLite for local data storage[cite: 65, 96].
 
-CredifyQR leverages **Hexagonal Architecture (Ports and Adapters)** to enforce a clean separation of concerns. The core domain logic is insulated from external dependencies, ensuring that changes to the UI routing or database layer do not compromise credential processing rules.
+[cite_start]The structural foundation relies on **Hexagonal Architecture (Ports and Adapters)** to separate core domain logic from external interfaces (database, web server), ensuring high maintainability and system fault tolerance[cite: 92]. 
 
-System data and logic are managed within distinct **Bounded Contexts**:
-* **Identity Context:** Manages user roles (Student, Registrar, Director), authentication, and security permissions.
-* **Credential Context:** Handles the document lifecycle, data encoding, unique token generation, and the public verification endpoint.
+[cite_start]To manage institutional data complexity, operations are isolated into strict **Bounded Contexts**[cite: 121]:
+* [cite_start]**Identity Context:** Encapsulates all user authentication, authorization, and Role-Based Access Control (RBAC) logic[cite: 123, 134].
+* [cite_start]**Credential Context:** Operates independently to handle the document lifecycle, data encoding, unique validation token generation, and the public verification query endpoint[cite: 125].
 
-[back to top](#title-credifyqr)
+[cite_start]Third-party validation operates on a **Token-Based Verification Model**[cite: 128]. [cite_start]Documents are stamped with embedded QR codes containing high-entropy, cryptographically hard-to-guess tokens[cite: 131]. [cite_start]External scanners are directed to a tightly restricted public verification portal to view validity status instantly, requiring zero account creation[cite: 132].
 
----
+## Installation & User Guide
 
-## Installation
+### Prerequisites
+* **Java Development Kit (JDK):** Version 17 or higher.
+* **Build Tool:** Gradle 8.5+.
 
-As a Java-based application utilizing an embedded SQLite database, CredifyQR requires minimal local setup. Ensure the Java Development Kit (JDK 17 or higher) is installed on your machine.
+### Installation Steps
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/JohnLesterDev/CredifyQR.git](https://github.com/JohnLesterDev/CredifyQR.git)
+    cd CredifyQR
+    ```
+2.  **Environment Configuration:**
+    Create a `.env` file in the `credifyqr` directory. You must supply a secure JWT secret.
+    ```env
+    HOST=0.0.0.0
+    PORT=8080
+    JWT_SECRET=YourSuperSecretKeyHereMustBe32Chars+
+    DB_URL=jdbc:sqlite:credifyqr.db
+    ```
+3.  **Build and Execute:**
+    Run the application utilizing the Gradle wrapper.
+    ```bash
+    ./gradlew run
+    ```
+4.  **Access:** Navigate to `http://localhost:8080` in your browser.
 
-1. Clone the repository: `git clone https://github.com/JohnLesterDev/CredifyQR.git`
-2. Navigate to the project directory: `cd CredifyQR`
-3. Build and run the application using your preferred build tool (e.g., Maven/Gradle) or IDE.
-4. Access the local web server at `http://localhost:<configured-port>`.
+### User Guide & Workflow
+[cite_start]CredifyQR enforces strict hierarchical workflows through Role-Based Access Control (RBAC)[cite: 134]. 
 
-*(Note: Detailed build instructions and environment variable configurations will be provided upon the stable release.)*
+#### 1. System Administrator
+* **Initial Setup:** Access the `/admin` portal. Authenticate using the default bootstrap credentials (`sysadmin` / `admin123`).
+* **Domain Configuration:** Immediately configure the **Institutional Domain** (e.g., `ctu.edu.ph`). The system restricts QR generation and staff account claiming until this domain is locked.
+* **Provisioning:** Stage Employee identities (Campus Directors and Registrar Staff) via the System Overview panel.
 
-[back to top](#title-credifyqr)
+#### 2. Registrar Staff
+* **Account Claiming:** Navigate to the `/admin` portal and use the Secure Staff Claim feature utilizing the Employee ID staged by the SysAdmin, your birthdate, and a valid institutional email.
+* **Student Provisioning:** Stage new student accounts via the dashboard using the student's ID, Name, and Birthdate.
+* **Document Processing:** Monitor the "Pending Uploads" queue. Upload physical documents requested by students. The system strictly permits and verifies `.pdf` files.
 
----
+#### 3. Student
+* **Account Claiming:** Access the root `/login` portal. Claim your staged identity using your 8-digit Student ID and Birthdate to generate a temporary secure password.
+* **Request Credentials:** Select and request necessary academic documents (`LEDGER`, `COR`, `GRADES`).
+* **Retrieval:** Once approved and stamped by the administration, download your verifiable digital credential directly from the dashboard.
+
+#### 4. Campus Director
+* **Authorization:** Approve claimed Registrar Staff accounts to grant them write-access to the system.
+* **Document Signature:** Review pending documents uploaded by Registrars. Approving a document executes the PDF Stamper Port, cryptographically attaching the unique QR code and officially issuing the document.
+
+#### 5. External Verifiers
+* **Instant Verification:** Scan the QR code embedded on the credential. [cite_start]You will be routed immediately to the system's public verification endpoint (`/verify/{id}`) confirming authenticity, student name, and issue date without requiring system login credentials[cite: 70].
 
 ## Acknowledgements
+[cite_start]This capstone project is presented to the Faculty of the College of Technology, Management, and Entrepreneurship (CTME Department) at **Cebu Technological University - Consolacion Campus** in partial fulfillment of the requirements for the degree Bachelor of Science in Information Technology[cite: 2, 4, 6, 8, 9].
 
-This capstone project is presented to the Faculty of the College of Technology, Management, and Entrepreneurship (CTME Department) at **Cebu Technological University - Consolacion Campus** in partial fulfillment of the requirements for the degree Bachelor of Science in Information Technology.
+**Development Team:**
+* [cite_start]Donita C. Pilapil [cite: 11]
+* [cite_start]Johana B. Aquino [cite: 12]
+* [cite_start]Andrew Orriesga [cite: 13]
+* [cite_start]John Lester L. Licayan [cite: 14]
+* [cite_start]John Andrew B. Stewart [cite: 15]
+* [cite_start]Danniela Ysabelle Y. Rabadon [cite: 16]
 
-The development of CredifyQR is the result of the collaborative effort of the following team members:
+We extend our deepest gratitude to our project adviser, **Prof. [cite_start]Jamaica C. Burgos**, for her invaluable guidance and rigorous academic oversight[cite: 17, 18].
 
-- **Pilapil, Donita C.**
-- **Aquino, Johana B.**
-- **Orriesga, Andrew**
-- **Licayan, John Lester L.**
-- **Rabadon, Danniela Ysabelle Y.**
-
-We extend our deepest gratitude to our project adviser, **Prof. Jamaica C. Burgos**, for her invaluable guidance, rigorous academic oversight, and continuous support throughout the research and development lifecycle of this project.
-
----
-
-## Contact Details
-
-For inquiries regarding the system architecture, technical implementation, or to report any issues, please contact the development lead at [johnlesterincbusiness@gmail.com](mailto:johnlesterincbusiness@gmail.com). 
-
-[back to top](#title-credifyqr)
+## Contacts
+For inquiries regarding the system architecture, technical implementation, or to report any issues, please contact the development lead at [johnlesterincbusiness@gmail.com](mailto:johnlesterincbusiness@gmail.com).

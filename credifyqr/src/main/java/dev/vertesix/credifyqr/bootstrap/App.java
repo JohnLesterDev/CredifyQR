@@ -16,9 +16,16 @@ import dev.vertesix.credifyqr.Identity.core.domain.User;
 import dev.vertesix.credifyqr.Identity.core.ports.*;
 import dev.vertesix.credifyqr.Identity.core.service.IdentityService;
 
+import dev.vertesix.credifyqr.Credentials.adapters.inbound.web.DocumentController;
+import dev.vertesix.credifyqr.Credentials.adapters.outbound.db.SqliteDocumentRepository;
+import dev.vertesix.credifyqr.Credentials.adapters.outbound.pdf.PdfBoxStamperAdapter;
+import dev.vertesix.credifyqr.Credentials.core.ports.DocumentRepository;
+import dev.vertesix.credifyqr.Credentials.core.ports.DocumentUseCase;
+import dev.vertesix.credifyqr.Credentials.core.ports.PdfStamperPort;
+import dev.vertesix.credifyqr.Credentials.core.service.DocumentService;
+
 import java.util.UUID;
 
-// Wired SqliteAuditRepository into bootstrap and injected into IdentityService
 public class App {
     private static final Logger logger = LoggerFactory.getLogger(App.class);
 
@@ -34,16 +41,23 @@ public class App {
         DatabaseConnection.init(dbUrl);
         JwtProvider.init(jwtSecret);
 
+        // Identity Context
         UserRepository userRepository = new SqliteUserRepository();
         SettingsRepository settingsRepository = new SqliteSettingsRepository();
         TokenBlacklistRepository blacklistRepository = new SqliteBlacklistRepository();
         PasswordGenerator passwordGenerator = new SecurePasswordAdapter();
         AuditRepository auditRepository = new SqliteAuditRepository();
-
         IdentityUseCase identityService = new IdentityService(userRepository, settingsRepository, passwordGenerator, auditRepository);
+        
+        // Credentials Context
+        DocumentRepository documentRepository = new SqliteDocumentRepository();
+        PdfStamperPort pdfStamperPort = new PdfBoxStamperAdapter();
+        DocumentUseCase documentService = new DocumentService(documentRepository, pdfStamperPort, userRepository, auditRepository);
+
         AuthMiddleware.init(blacklistRepository); 
         AuthController authController = new AuthController(identityService, blacklistRepository);
         PageController pageController = new PageController(identityService);
+        DocumentController documentController = new DocumentController(documentService, identityService);
 
         Javalin app = Javalin.create(config -> {
             config.showJavalinBanner = false;
@@ -54,18 +68,25 @@ public class App {
 
         authController.registerRoutes(app);
         pageController.registerRoutes(app); 
+        documentController.registerRoutes(app);
 
+        // Routing Security Enforcements
         app.before("/api/student/*", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
         app.before("/api/change-password", ctx -> AuthMiddleware.requireRole(ctx, Role.values()));
-        
         app.before("/api/admin/settings/*", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN));
-        
         app.before("/api/admin/users", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
-
         app.before("/api/admin/users/approve", ctx -> AuthMiddleware.requireRole(ctx, Role.CAMPUS_DIRECTOR));
 
-        seedSystem(identityService, userRepository);
+        // Credentials Context Security
+        app.before("/api/docs/request", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
+        app.before("/api/docs/student", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
+        app.before("/api/docs/registrar/*", ctx -> AuthMiddleware.requireRole(ctx, Role.REGISTRAR_STAFF));
+        app.before("/api/docs/director/*", ctx -> AuthMiddleware.requireRole(ctx, Role.CAMPUS_DIRECTOR));
+        app.before("/api/docs/*/upload", ctx -> AuthMiddleware.requireRole(ctx, Role.REGISTRAR_STAFF));
+        app.before("/api/docs/*/approve", ctx -> AuthMiddleware.requireRole(ctx, Role.CAMPUS_DIRECTOR));
+        app.before("/api/docs/*/download", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR, Role.SYSTEM_ADMIN));
 
+        seedSystem(identityService, userRepository);
         logger.info("CredifyQR Overhaul Complete. System is live.");
     }
 
