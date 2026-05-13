@@ -13,7 +13,12 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import org.mindrot.jbcrypt.BCrypt;
 
-// Instrumented IdentityService to hook AuditRepository into all authentication and mutation paths
+/**
+ * Identity service implementing authentication, user provisioning, and account management.
+ *
+ * <p>This service enforces role-based access control, password policy, claim flows,
+ * and audit logging for user identity operations.</p>
+ */
 public class IdentityService implements IdentityUseCase {
 
     private final UserRepository userRepository;
@@ -267,5 +272,24 @@ public class IdentityService implements IdentityUseCase {
 
     private String hashPassword(String password) {
         return BCrypt.hashpw(password, BCrypt.gensalt(12));
+    }
+
+    @Override
+    public void disableRegistrar(String adminId, String targetRegistrarId, String ipAddress) {
+        User admin = userRepository.findById(adminId).orElseThrow();
+        if (admin.getRole() != Role.SYSTEM_ADMIN) {
+            throw new SecurityException("Only System Administrators can disable Registrars.");
+        }
+        
+        User registrar = userRepository.findById(targetRegistrarId)
+            .orElseThrow(() -> new IllegalArgumentException("Target user not found."));
+            
+        if (registrar.getRole() != Role.REGISTRAR_STAFF) {
+            throw new IllegalArgumentException("Target is not a Registrar account.");
+        }
+        
+        registrar.setApproved(false);
+        userRepository.save(registrar);
+        logAudit(adminId, ActionType.ROLE_MODIFIED, targetRegistrarId, ipAddress);
     }
 }

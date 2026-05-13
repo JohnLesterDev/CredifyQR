@@ -9,6 +9,11 @@ import java.util.Date;
 import java.util.UUID;
 
 
+/**
+ * Provides JWT token creation and validation for user sessions.
+ *
+ * <p>Must be initialized once during application startup.</p>
+ */
 public class JwtProvider {
     private static SecretKey KEY;
 

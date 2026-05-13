@@ -8,7 +8,11 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-// Implemented SQLite adapter for the AuditRepository port to physically store compliance logs
+/**
+ * SQLite implementation of {@link AuditRepository}.
+ *
+ * <p>Persists audit log entries for security and compliance tracing.</p>
+ */
 public class SqliteAuditRepository implements AuditRepository {
 
     public SqliteAuditRepository() {

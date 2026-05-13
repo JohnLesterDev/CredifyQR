@@ -11,16 +11,29 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.Map;
 
+/**
+ * Controller for handling document-related operations in the CredifyQR system.
+ * Manages requests, uploads, approvals, downloads, and verifications of documents.
+ */
 public class DocumentController {
 
     private final DocumentUseCase documentUseCase;
     private final IdentityUseCase identityUseCase; // To fetch current domain for QR
 
+    /**
+     * Constructs a new DocumentController with the given use cases.
+     * @param documentUseCase the document use case
+     * @param identityUseCase the identity use case
+     */
     public DocumentController(DocumentUseCase documentUseCase, IdentityUseCase identityUseCase) {
         this.documentUseCase = documentUseCase;
         this.identityUseCase = identityUseCase;
     }
 
+    /**
+     * Registers the routes for document operations with the Javalin app.
+     * @param app the Javalin application instance
+     */
     public void registerRoutes(Javalin app) {
         app.post("/api/docs/request", this::requestDocument);
         app.get("/api/docs/student", this::getStudentDocs);
@@ -35,8 +48,14 @@ public class DocumentController {
         
         // NEW: Public Verification Endpoint
         app.get("/api/public/verify/{id}", this::verifyDocument);
+
+        app.get("/api/docs/{id}/preview", this::previewDocument);
     }
 
+    /**
+     * Handles the request for a new document.
+     * @param ctx the Javalin context
+     */
     private void requestDocument(Context ctx) {
         String userId = ctx.attribute("userId");
         String typeStr = ctx.formParam("type");
@@ -50,6 +69,10 @@ public class DocumentController {
         }
     }
 
+    /**
+     * Handles the upload of a document.
+     * @param ctx the Javalin context
+     */
     private void uploadDocument(Context ctx) {
         String registrarId = ctx.attribute("userId");
         String docId = ctx.pathParam("id");
@@ -78,36 +101,53 @@ public class DocumentController {
         }
     }
 
+    /**
+     * Handles the approval of a document.
+     * @param ctx the Javalin context
+     */
     private void approveDocument(Context ctx) {
         String directorId = ctx.attribute("userId");
         String docId = ctx.pathParam("id");
         
         try {
-            String domain = identityUseCase.getInstitutionDomain();
-            if (domain == null || domain.isBlank()) {
-                ctx.status(400).result("System domain not configured. Cannot generate verification QR.");
-                return;
-            }
+            // Generate base URL from the incoming HTTP request context
+            String baseUrl = ctx.scheme() + "://" + ctx.host();
             
-            documentUseCase.approveAndStampDocument(directorId, docId, domain, ctx.ip());
+            documentUseCase.approveAndStampDocument(directorId, docId, baseUrl, ctx.ip());
             ctx.status(200).result("Document Approved & Cryptographically Stamped.");
         } catch (Exception e) {
             ctx.status(500).result(e.getMessage());
         }
     }
 
+    /**
+     * Retrieves the documents for a student.
+     * @param ctx the Javalin context
+     */
     private void getStudentDocs(Context ctx) {
         ctx.json(documentUseCase.getStudentDocuments(ctx.attribute("userId")));
     }
 
+    /**
+     * Retrieves pending uploads for the registrar.
+     * @param ctx the Javalin context
+     */
     private void getRegistrarPending(Context ctx) {
         ctx.json(documentUseCase.getPendingUploads(ctx.attribute("userId")));
     }
 
+    /**
+     * Retrieves pending approvals for the director.
+     * @param ctx the Javalin context
+     */
     private void getDirectorPending(Context ctx) {
         ctx.json(documentUseCase.getPendingApprovals(ctx.attribute("userId")));
     }
 
+    /**
+     * Handles the download of a document.
+     * @param ctx the Javalin context
+     */
     private void downloadDocument(Context ctx) {
         String userId = ctx.attribute("userId");
         String docId = ctx.pathParam("id");
@@ -122,6 +162,10 @@ public class DocumentController {
         }
     }
 
+    /**
+     * Verifies a document publicly.
+     * @param ctx the Javalin context
+     */
     private void verifyDocument(Context ctx) {
         String docId = ctx.pathParam("id");
         try {
@@ -131,6 +175,25 @@ public class DocumentController {
             ctx.status(404).result(e.getMessage());
         } catch (Exception e) {
             ctx.status(500).result("Internal verification engine fault.");
+        }
+    }
+
+    /**
+     * Handles the preview of a raw document before approval.
+     * @param ctx the Javalin context
+     */
+    private void previewDocument(Context ctx) {
+        String userId = ctx.attribute("userId");
+        String docId = ctx.pathParam("id");
+
+        try {
+            File file = documentUseCase.getRawDocumentFile(userId, docId);
+            ctx.contentType("application/pdf");
+            // 'inline' instructs the browser to open it in the tab
+            ctx.header("Content-Disposition", "inline; filename=\"PREVIEW_" + file.getName() + "\"");
+            ctx.result(new FileInputStream(file));
+        } catch (Exception e) {
+            ctx.status(403).result(e.getMessage());
         }
     }
 }

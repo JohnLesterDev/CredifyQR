@@ -24,6 +24,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Document service implementing the application use case for credential workflows.
+ *
+ * <p>This service handles document requests, file uploads, approvals, PDF stamping,
+ * retrieval, and verification logic for the CredifyQR system.</p>
+ */
 public class DocumentService implements DocumentUseCase {
 
     private final DocumentRepository documentRepository;
@@ -99,7 +105,7 @@ public class DocumentService implements DocumentUseCase {
     }
 
     @Override
-    public void approveAndStampDocument(String directorId, String documentId, String appDomain, String ipAddress) {
+    public void approveAndStampDocument(String directorId, String documentId, String baseUrl, String ipAddress) {
         User director = userRepository.findById(directorId).orElseThrow();
         if (director.getRole() != Role.CAMPUS_DIRECTOR) throw new SecurityException("Unauthorized approval attempt");
 
@@ -113,8 +119,8 @@ public class DocumentService implements DocumentUseCase {
             String stampedFilename = "STAMPED_" + rawFile.getName();
             File stampedFile = new File(STORAGE_STAMPED, stampedFilename);
 
-            // Constructing verification URL
-            String verifyUrl = "https://" + appDomain + "/verify/" + request.getId();
+            // Constructing dynamic verification URL
+            String verifyUrl = baseUrl + "/verify/" + request.getId();
 
             // Trigger Phase 2 Engine
             pdfStamperPort.stampPdf(rawFile, stampedFile, verifyUrl);
@@ -192,5 +198,24 @@ public class DocumentService implements DocumentUseCase {
             "issueDate", request.getTimestamp(),
             "status", request.getStatus().name()
         );
+    }
+
+    @Override
+    public File getRawDocumentFile(String userId, String documentId) {
+        DocumentRequest request = documentRepository.findById(documentId).orElseThrow();
+        User user = userRepository.findById(userId).orElseThrow();
+
+        if (user.getRole() != Role.CAMPUS_DIRECTOR && user.getRole() != Role.REGISTRAR_STAFF && user.getRole() != Role.SYSTEM_ADMIN) {
+            throw new SecurityException("Unauthorized raw document access");
+        }
+
+        if (request.getRawFilePath() == null) {
+            throw new IllegalStateException("Raw file has not been uploaded yet");
+        }
+
+        File file = new File(request.getRawFilePath());
+        if (!file.exists()) throw new IllegalStateException("Raw file missing from disk");
+        
+        return file;
     }
 }

@@ -9,7 +9,7 @@
         }
         .pwd-wrapper { position: relative; display: flex; align-items: center; }
         .pwd-wrapper input { padding-right: 40px; width: 100%; }
-        .eye-btn { position: absolute; right: 12px; width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer; user-select: none; display: flex; }
+        .eye-btn { position: absolute; right: 12px; width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer; user-select: none; -webkit-touch-callout: none; display: flex; }
         .eye-btn:hover { color: var(--text-primary); }
         .eye-btn svg { width: 100%; height: 100%; }
         
@@ -40,7 +40,13 @@
                 <label>Passphrase</label>
                 <div class="pwd-wrapper">
                     <input type="password" th:id="'p_' + ${nonce}" data-target="login-pass" autocomplete="new-password" required>
-                    <div class="eye-btn" onmousedown="revealPwd(this)" onmouseup="hidePwd(this)" onmouseleave="hidePwd(this)">
+                    <div class="eye-btn" 
+                         onmousedown="revealPwd(this)" 
+                         onmouseup="hidePwd(this)" 
+                         onmouseleave="hidePwd(this)"
+                         ontouchstart="revealPwd(this, event)" 
+                         ontouchend="hidePwd(this)" 
+                         ontouchcancel="hidePwd(this)">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
                     </div>
                 </div>
@@ -88,7 +94,7 @@
                 <div class="credential-header">Identity Verified</div>
                 <p class="credential-warning">Store this password immediately. It will not be shown again.</p>
                 <div class="credential-value" id="temp-pwd-text"></div>
-                <button type="button" onclick="copyAndRedirect()" style="width: 100%;">Copy & Proceed to Login</button>
+                <button type="button" onclick="copyAndRedirect(event)" style="width: 100%;">Copy & Proceed to Login</button>
             </div>
         </form>
 
@@ -105,7 +111,6 @@
                     document.getElementById('remember-me').checked = true;
                 }
 
-                // Fetch institutional domain on load via PUBLIC route
                 try {
                     const res = await fetch('/api/public/domain');
                     if (res.ok) {
@@ -125,7 +130,6 @@
                 }
             });
 
-            // Aggressive UI Lockdown
             function lockSystem(reason) {
                 document.getElementById('domain-suffix').textContent = '@[LOCKED]';
                 
@@ -213,32 +217,39 @@
                 }
             }
 
-            function copyAndRedirect() {
+            async function copyAndRedirect(event) {
                 const pwd = document.getElementById('temp-pwd-text').textContent;
                 const prefix = document.getElementById('claim-email-prefix').value;
                 const fullEmail = prefix + '@' + globalDomain;
-                const btn = event.target;
+                const btn = event ? event.target : document.querySelector('#temp-password-box button');
                 
-                navigator.clipboard.writeText(pwd).then(() => {
-                    const originalText = btn.textContent;
-                    btn.textContent = '✓ Copied! Redirecting...';
-                    btn.style.backgroundColor = 'var(--success)';
-                    btn.disabled = true;
+                const originalText = btn.textContent;
+                btn.textContent = 'Proceeding...';
+                btn.style.backgroundColor = 'var(--success)';
+                btn.disabled = true;
 
-                    document.querySelector('input[data-target="login-user"]').value = fullEmail;
-                    document.querySelector('input[data-target="login-pass"]').value = pwd;
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(pwd);
+                        btn.textContent = '✓ Copied! Redirecting...';
+                    }
+                } catch (e) {
+                    console.warn("Clipboard access denied, ignoring.");
+                }
 
-                    setTimeout(() => {
-                        showLogin();
-                        btn.textContent = originalText;
-                        btn.style.backgroundColor = '';
-                        btn.disabled = false;
-                        document.getElementById('temp-password-box').classList.add('hidden');
-                        document.getElementById('claim-id').value = '';
-                        document.getElementById('claim-email-prefix').value = '';
-                        document.getElementById('claim-dob').value = '';
-                    }, 1500);
-                }).catch(() => alert("Failed to copy. Please copy manually."));
+                document.querySelector('input[data-target="login-user"]').value = fullEmail;
+                document.querySelector('input[data-target="login-pass"]').value = pwd;
+
+                setTimeout(() => {
+                    showLogin();
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '';
+                    btn.disabled = false;
+                    document.getElementById('temp-password-box').classList.add('hidden');
+                    document.getElementById('claim-id').value = '';
+                    document.getElementById('claim-email-prefix').value = '';
+                    document.getElementById('claim-dob').value = '';
+                }, 1500);
             }
 
             async function handleLogin() {

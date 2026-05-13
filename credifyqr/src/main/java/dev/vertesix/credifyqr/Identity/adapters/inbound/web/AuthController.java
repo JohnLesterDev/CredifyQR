@@ -17,16 +17,33 @@ import io.javalin.http.SameSite;
 import io.jsonwebtoken.Claims;
 
 // Updated controller routes to extract ctx.ip() and pass network context into the domain
+/**
+ * Controller for authentication and account management routes.
+ *
+ * <p>Handles login, logout, session status, claims, password changes, user provisioning,
+ * and administrative settings endpoints.</p>
+ */
 public class AuthController {
 
     private final IdentityUseCase identityUseCase;
     private final TokenBlacklistRepository blacklistRepository;
 
+    /**
+     * Creates a new auth controller.
+     *
+     * @param identityUseCase identity service use case
+     * @param blacklistRepository token blacklist repository
+     */
     public AuthController(IdentityUseCase identityUseCase, TokenBlacklistRepository blacklistRepository) {
         this.identityUseCase = identityUseCase;
         this.blacklistRepository = blacklistRepository;
     }
 
+    /**
+     * Registers all authentication and account management routes.
+     *
+     * @param app Javalin application instance
+     */
     public void registerRoutes(Javalin app) {
         app.post("/api/login", this::login);
         app.post("/api/logout", this::logout);
@@ -47,6 +64,8 @@ public class AuthController {
 
         app.get("/api/admin/users", this::getAllUsers);
         app.post("/api/admin/clear-cache", this::clearCache);
+
+        app.post("/api/admin/users/disable", this::disableRegistrar);
     }
 
     private void login(Context ctx) {
@@ -212,6 +231,11 @@ public class AuthController {
         }
     }
 
+    /**
+     * Handles password change requests for authenticated users.
+     *
+     * @param ctx Javalin HTTP context
+     */
     public void changePassword(Context ctx) {
         String userId = ctx.attribute("userId"); 
         String newPassword = ctx.formParam("newPassword");
@@ -371,5 +395,29 @@ public class AuthController {
         ctx.removeCookie("portal_pref");
         ctx.removeCookie("auth_token");
         ctx.status(200).result("Cookies cleared. Client must clear localStorage.");
+    }
+
+    private void disableRegistrar(Context ctx) {
+        String adminId = ctx.attribute("userId");
+        String targetId = SanitizerUtil.clean(ctx.formParam("targetId"));
+        String ipAddress = ctx.ip();
+        
+        if (adminId == null) {
+            ctx.status(401).result("Unauthorized.");
+            return;
+        }
+        if (targetId == null || targetId.isBlank()) {
+            ctx.status(400).result("Missing target ID.");
+            return;
+        }
+        
+        try {
+            identityUseCase.disableRegistrar(adminId, targetId, ipAddress);
+            ctx.status(200).result("Registrar disabled successfully.");
+        } catch (SecurityException | IllegalArgumentException e) {
+            ctx.status(400).result(e.getMessage());
+        } catch (Exception e) {
+            ctx.status(500).result("Disable operation failed.");
+        }
     }
 }

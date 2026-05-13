@@ -61,3 +61,19 @@ jar {
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+javadoc {
+    source = sourceSets.main.allJava
+    classpath = configurations.compileClasspath
+    destinationDir = file("${buildDir}/docs/javadoc")
+    options.addStringOption('Xdoclint:none', '-quiet')
+    
+    options {
+        encoding = 'UTF-8'
+        charSet = 'UTF-8'
+        author = true
+        version = true
+    }
+}
+
+build.dependsOn javadoc

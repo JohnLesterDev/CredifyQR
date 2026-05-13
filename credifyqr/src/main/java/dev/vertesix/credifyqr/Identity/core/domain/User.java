@@ -1,5 +1,10 @@
 package dev.vertesix.credifyqr.Identity.core.domain;
 
+/**
+ * Domain entity representing an application user.
+ *
+ * <p>Encapsulates identity attributes, account state, and role information.</p>
+ */
 public class User {
     private final String id;
     private final String username;

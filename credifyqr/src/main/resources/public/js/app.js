@@ -177,7 +177,8 @@ async function loadDirectorDocs() {
             <tr style="border-bottom: 1px solid var(--border);">
                 <td style="padding: 10px; font-family:monospace;">${d.studentId}</td>
                 <td style="padding: 10px; font-weight:600;">${d.type}</td>
-                <td style="padding: 10px;">
+                <td style="padding: 10px; display:flex; gap:10px;">
+                    <a href="/api/docs/${d.id}/preview" target="_blank" style="padding:6px 12px; font-size:0.8rem; background:var(--accent); color:white; text-decoration:none; border-radius:8px;">Preview</a>
                     <button onclick="approvePdf('${d.id}', this)" style="margin:0; padding:6px 12px; font-size:0.8rem; background:var(--success);">Stamp & Approve</button>
                 </td>
             </tr>

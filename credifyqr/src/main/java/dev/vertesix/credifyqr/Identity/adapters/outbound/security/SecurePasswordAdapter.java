@@ -4,6 +4,9 @@ import java.security.SecureRandom;
 
 import dev.vertesix.credifyqr.Identity.core.ports.PasswordGenerator;
 
+/**
+ * Secure password generator for temporary account provisioning.
+ */
 public class SecurePasswordAdapter implements PasswordGenerator {
     private final SecureRandom random = new SecureRandom();
     private static final String CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";

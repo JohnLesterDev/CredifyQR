@@ -3,6 +3,9 @@ package dev.vertesix.credifyqr.Identity.adapters.outbound.db;
 import dev.vertesix.credifyqr.Identity.core.ports.TokenBlacklistRepository;
 import java.sql.*;
 
+/**
+ * SQLite-backed token blacklist for revoking JWT sessions.
+ */
 public class SqliteBlacklistRepository implements TokenBlacklistRepository {
 
     public SqliteBlacklistRepository() {

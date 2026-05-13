@@ -26,9 +26,24 @@ import dev.vertesix.credifyqr.Credentials.core.service.DocumentService;
 
 import java.util.UUID;
 
+/**
+ * Application bootstrapper for CredifyQR.
+ *
+ * <p>Initializes configuration, data stores, services, middleware, routes, and
+ * seeds a default system administrator account.</p>
+ */
 public class App {
     private static final Logger logger = LoggerFactory.getLogger(App.class);
 
+    /**
+     * Starts the CredifyQR application.
+     *
+     * <p>Loads environment variables, initializes the database and JWT provider,
+     * configures services and controllers, registers HTTP routes and security
+     * policies, and seeds the initial system administrator account.</p>
+     *
+     * @param args command line arguments passed to the application
+     */
     public static void main(String[] args) {
         Dotenv dotenv = Dotenv.configure().load();
         String dbUrl = dotenv.get("DB_URL", "jdbc:sqlite:credifyqr.db");
@@ -73,9 +88,11 @@ public class App {
         // Routing Security Enforcements
         app.before("/api/student/*", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
         app.before("/api/change-password", ctx -> AuthMiddleware.requireRole(ctx, Role.values()));
+        app.before("/api/admin/users/disable", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN));
         app.before("/api/admin/settings/*", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN));
-        app.before("/api/admin/users", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
         app.before("/api/admin/users/approve", ctx -> AuthMiddleware.requireRole(ctx, Role.CAMPUS_DIRECTOR));
+        app.before("/api/admin/users", ctx -> AuthMiddleware.requireRole(ctx, Role.SYSTEM_ADMIN, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR));
+        app.before("/api/docs/*/preview", ctx -> AuthMiddleware.requireRole(ctx, Role.REGISTRAR_STAFF, Role.CAMPUS_DIRECTOR, Role.SYSTEM_ADMIN));
 
         // Credentials Context Security
         app.before("/api/docs/request", ctx -> AuthMiddleware.requireRole(ctx, Role.STUDENT));
@@ -90,6 +107,13 @@ public class App {
         logger.info("CredifyQR Overhaul Complete. System is live.");
     }
 
+    /**
+     * Seeds the system with a default system administrator account if one does
+     * not already exist.
+     *
+     * @param service the identity service used for application startup logic
+     * @param repo the user repository used to query and save the administrator account
+     */
     private static void seedSystem(IdentityUseCase service, UserRepository repo) {
         if (repo.findByUsername("sysadmin").isEmpty()) {
             User sysAdmin = new User(
@@ -110,6 +134,11 @@ public class App {
         }
     }
 
+    /**
+     * Creates and configures the Thymeleaf template engine used by Javalin.
+     *
+     * @return a configured TemplateEngine instance for rendering HTML views
+     */
     private static TemplateEngine createTemplateEngine() {
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("/thymeleaf/");

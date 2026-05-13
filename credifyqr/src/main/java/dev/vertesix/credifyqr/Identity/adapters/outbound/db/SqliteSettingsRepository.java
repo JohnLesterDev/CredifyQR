@@ -4,6 +4,9 @@ import dev.vertesix.credifyqr.Identity.core.ports.SettingsRepository;
 import java.sql.*;
 import java.util.Optional;
 
+/**
+ * SQLite implementation of {@link SettingsRepository}.
+ */
 public class SqliteSettingsRepository implements SettingsRepository {
 
     public SqliteSettingsRepository() {

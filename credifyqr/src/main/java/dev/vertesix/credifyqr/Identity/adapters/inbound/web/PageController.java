@@ -10,6 +10,11 @@ import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.jsonwebtoken.Claims;
 
+/**
+ * Controller for page rendering and UI route handling.
+ *
+ * <p>Serves login pages, dashboards, force-password-change pages, and verification pages.</p>
+ */
 public class PageController {
     private final IdentityUseCase identityUseCase;
 

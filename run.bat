@@ -1,7 +1,7 @@
 @echo off
 :start
 echo [SYSTEM] Starting CredifyQR...
-call del credifyqr\credifyqr.db && gradlew.bat run
+call gradlew.bat run
 set EXIT_CODE=%errorlevel%
 
 :: Exit codes 130 or 3221225786 usually indicate Ctrl+C/Termination

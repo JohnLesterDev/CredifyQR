@@ -10,8 +10,6 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts; // FIXED: Plural
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
@@ -19,10 +17,24 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.InputStream;
 
+/**
+ * A PDF stamper adapter that uses PDFBox to add a QR code and optional logo to each page.
+ * <p>
+ * The adapter loads a raw PDF, writes a verification QR code and a small logo image
+ * to each page, and then saves the stamped result to an output file.
+ */
 public class PdfBoxStamperAdapter implements PdfStamperPort {
 
     private static final int QR_SIZE = 80;
 
+    /**
+     * Stamps the provided PDF file with a verification QR code and optional logo.
+     *
+     * @param rawFile the input PDF file to stamp
+     * @param outputFile the output PDF file to write the stamped document to
+     * @param verificationUrl the URL encoded in the QR code for verification
+     * @throws Exception if an error occurs while loading, stamping, or saving the PDF
+     */
     @Override
     public void stampPdf(File rawFile, File outputFile, String verificationUrl) throws Exception {
         QRCodeWriter qrCodeWriter = new QRCodeWriter();
@@ -58,16 +70,6 @@ public class PdfBoxStamperAdapter implements PdfStamperPort {
                         float logoStartY = startY + ((QR_SIZE - logoH) / 2); 
                         contentStream.drawImage(pdLogoImage, logoStartX, logoStartY, logoW, logoH);
                     }
-
-                    // FIXED: Using Standard14Fonts.FontName.HELVETICA
-                    contentStream.beginText();
-                    contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 7);
-                    contentStream.setNonStrokingColor(100, 100, 100); 
-                    
-                    float textY = startY - 10;
-                    contentStream.newLineAtOffset(qrStartX - 20, textY); 
-                    contentStream.showText("Verify at: " + verificationUrl);
-                    contentStream.endText();
                 }
             }
             document.save(outputFile);

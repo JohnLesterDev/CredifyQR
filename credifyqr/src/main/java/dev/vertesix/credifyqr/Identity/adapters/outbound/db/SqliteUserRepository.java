@@ -9,6 +9,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * SQLite implementation of {@link UserRepository}.
+ *
+ * <p>Persists user identities and supports lookups by username, id, and email.</p>
+ */
 public class SqliteUserRepository implements UserRepository {
     
     public SqliteUserRepository() {

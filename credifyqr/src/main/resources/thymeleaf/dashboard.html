@@ -53,9 +53,12 @@
 
         <main class="main-content">
             <header class="topbar">
-                <div class="user-meta">
-                    <h2>Welcome, <span th:text="${fullName}">User</span></h2>
-                    <p>System Access: <span class="role-badge" th:text="${role}">ROLE</span></p>
+                <div style="display: flex; align-items: center;">
+                    <button class="hamburger-btn" onclick="toggleSidebar()">&#9776;</button>
+                    <div class="user-meta">
+                        <h2>Welcome, <span th:text="${fullName}">User</span></h2>
+                        <p>System Access: <span class="role-badge" th:text="${role}">ROLE</span></p>
+                    </div>
                 </div>
             </header>
 
@@ -227,6 +230,7 @@
                                 <th style="padding: 10px;">Role</th>
                                 <th style="padding: 10px;">Email</th>
                                 <th style="padding: 10px;">Status</th>
+                                <th style="padding: 10px;">Action</th>
                             </tr>
                         </thead>
                         <tbody id="user-table-body">
@@ -306,6 +310,21 @@
                     if (currentRole === 'STUDENT') loadStudentDocs();
                     if (currentRole === 'REGISTRAR_STAFF') loadRegistrarDocs();
                     if (currentRole === 'CAMPUS_DIRECTOR') loadDirectorDocs();
+                });
+
+                // Mobile Sidebar Logic
+                function toggleSidebar() {
+                    document.querySelector('.sidebar').classList.toggle('active');
+                }
+
+                document.addEventListener('click', (e) => {
+                    const sidebar = document.querySelector('.sidebar');
+                    const hamburger = document.querySelector('.hamburger-btn');
+                    if (window.innerWidth <= 768 && sidebar.classList.contains('active')) {
+                        if (!sidebar.contains(e.target) && !hamburger.contains(e.target)) {
+                            sidebar.classList.remove('active');
+                        }
+                    }
                 });
 
                 // Tab Switcher
@@ -544,11 +563,34 @@
                     }
                 }
 
+                async function disableRegistrar(targetId) {
+                    if (!confirm("Disable this Registrar account? They will require Campus Director approval to be reactivated.")) return;
+                    
+                    const formData = new URLSearchParams();
+                    formData.append('targetId', targetId);
+                    
+                    try {
+                        const res = await fetch('/api/admin/users/disable', {
+                            method: 'POST',
+                            body: formData,
+                            credentials: 'same-origin'
+                        });
+                        
+                        if (res.ok) {
+                            loadUserTable();
+                        } else {
+                            alert(await res.text());
+                        }
+                    } catch (e) {
+                        alert("Network error. Could not disable registrar.");
+                    }
+                }
+
                 async function loadUserTable() {
                     const tbody = document.getElementById('user-table-body');
                     const appBody = document.getElementById('approval-table-body');
                     
-                    if(tbody) tbody.innerHTML = '<tr><td colspan="5">Loading roster...</td></tr>';
+                    if(tbody) tbody.innerHTML = '<tr><td colspan="6">Loading roster...</td></tr>';
                     if(appBody) appBody.innerHTML = '<tr><td colspan="4">Loading pending approvals...</td></tr>';
                     
                     try {
@@ -566,6 +608,11 @@
                                         <td style="padding: 10px;">
                                             ${u.status}
                                             ${u.role === 'REGISTRAR_STAFF' && !u.isApproved ? '<br><span style="color:var(--danger); font-size:0.75rem;">(Locked/Pending)</span>' : ''}
+                                        </td>
+                                        <td style="padding: 10px;">
+                                            ${currentRole === 'SYSTEM_ADMIN' && u.role === 'REGISTRAR_STAFF' && u.isApproved ? 
+                                            `<a href="#" onclick="disableRegistrar('${u.id}'); return false;" style="color:var(--danger); font-size:0.8rem; text-decoration:none; border: 1px solid var(--danger); padding: 4px 8px; border-radius: 4px;">Disable</a>` 
+                                            : '-'}
                                         </td>
                                     </tr>
                                 `).join('');
@@ -590,7 +637,7 @@
                             }
                         }
                     } catch (e) {
-                        if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="color: var(--danger);">Failed to load roster.</td></tr>';
+                        if(tbody) tbody.innerHTML = '<tr><td colspan="6" style="color: var(--danger);">Failed to load roster.</td></tr>';
                         if(appBody) appBody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load approvals. Access Denied or Network Error.</td></tr>';
                     }
                 }

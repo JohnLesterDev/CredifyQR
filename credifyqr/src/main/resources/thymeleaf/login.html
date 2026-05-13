@@ -5,7 +5,7 @@
     <style>
         .pwd-wrapper { position: relative; display: flex; align-items: center; }
         .pwd-wrapper input { padding-right: 40px; width: 100%; }
-        .eye-btn { position: absolute; right: 12px; width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer; display: flex; }
+        .eye-btn { position: absolute; right: 12px; width: 20px; height: 20px; color: var(--text-secondary); cursor: pointer; display: flex; -webkit-touch-callout: none; user-select: none; }
         .remember-me { display: flex; align-items: center; margin-bottom: 1.25rem; font-size: 0.9rem; color: var(--text-secondary); cursor: pointer; user-select: none; position: relative; }
         .remember-me input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
         .checkmark { height: 18px; width: 18px; background-color: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; margin-right: 10px; position: relative; transition: all 0.2s ease; }
@@ -34,7 +34,13 @@
                 <label>Password</label>
                 <div class="pwd-wrapper">
                     <input type="password" th:id="'p_' + ${nonce}" data-target="login-pass" placeholder="Enter Password" required>
-                    <div class="eye-btn" onmousedown="this.previousElementSibling.type='text'" onmouseup="this.previousElementSibling.type='password'">
+                    <div class="eye-btn" 
+                         onmousedown="this.previousElementSibling.type='text'" 
+                         onmouseup="this.previousElementSibling.type='password'"
+                         onmouseleave="this.previousElementSibling.type='password'"
+                         ontouchstart="event.preventDefault(); this.previousElementSibling.type='text';"
+                         ontouchend="this.previousElementSibling.type='password'"
+                         ontouchcancel="this.previousElementSibling.type='password'">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
                     </div>
                 </div>
@@ -67,7 +73,7 @@
                 <div class="credential-header">Identity Verified</div>
                 <p class="credential-warning">Copy your temporary password now. You will be forced to change it on the next step.</p>
                 <div class="credential-value" id="temp-pwd-text"></div>
-                <button type="button" onclick="copyAndRedirect()" style="width: 100%;">Copy & Proceed</button>
+                <button type="button" onclick="copyAndRedirect(event)" style="width: 100%;">Copy & Proceed</button>
             </div>
         </form>
 
@@ -120,21 +126,35 @@
                 }
             }
 
-            function copyAndRedirect() {
+            async function copyAndRedirect(event) {
                 const pwd = document.getElementById('temp-pwd-text').textContent;
-                const btn = event.target;
-                navigator.clipboard.writeText(pwd).then(() => {
-                    btn.textContent = '✓ Copied!';
-                    setTimeout(() => {
-                        showLogin();
-                        btn.textContent = 'Copy & Proceed';
-                        document.querySelector('input[data-target="login-user"]').value = document.getElementById('claim-id').value;
-                        document.querySelector('input[data-target="login-pass"]').value = pwd;
-                        document.getElementById('temp-password-box').classList.add('hidden');
-                        document.getElementById('claim-id').value = '';
-                        document.getElementById('claim-dob').value = '';
-                    }, 1000);
-                });
+                const btn = event ? event.target : document.querySelector('#temp-password-box button');
+                
+                const originalText = btn.textContent;
+                btn.textContent = 'Proceeding...';
+                btn.style.backgroundColor = 'var(--success)';
+                btn.disabled = true;
+
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(pwd);
+                        btn.textContent = '✓ Copied!';
+                    }
+                } catch (e) {
+                    console.warn("Clipboard access denied, ignoring.");
+                }
+
+                setTimeout(() => {
+                    showLogin();
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '';
+                    btn.disabled = false;
+                    document.querySelector('input[data-target="login-user"]').value = document.getElementById('claim-id').value;
+                    document.querySelector('input[data-target="login-pass"]').value = pwd;
+                    document.getElementById('temp-password-box').classList.add('hidden');
+                    document.getElementById('claim-id').value = '';
+                    document.getElementById('claim-dob').value = '';
+                }, 1000);
             }
 
             async function handleLogin() {

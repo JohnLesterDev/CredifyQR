@@ -7,11 +7,25 @@ import io.javalin.http.UnauthorizedResponse;
 import io.jsonwebtoken.Claims;
 import java.util.Arrays;
 
+/**
+ * Middleware enforcing JWT-based authentication and role authorization.
+ */
 public class AuthMiddleware {
     private static TokenBlacklistRepository blacklist;
 
+    /**
+     * Initializes the middleware with a blacklist repository.
+     *
+     * @param repo token blacklist repository
+     */
     public static void init(TokenBlacklistRepository repo) { blacklist = repo; }
 
+    /**
+     * Validates the JWT token and authorizes the request based on allowed roles.
+     *
+     * @param ctx Javalin HTTP context
+     * @param allowedRoles permitted roles for the route
+     */
     public static void requireRole(Context ctx, Role... allowedRoles) {
         String token = ctx.cookie("auth_token");
         if (token == null) throw new UnauthorizedResponse("Authentication required.");
